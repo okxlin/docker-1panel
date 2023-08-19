@@ -1,0 +1,47 @@
+name: Build Docker-1Panel
+on:
+  schedule:
+    - cron: "0 0 * * *"  # 每天的UTC 00:00执行
+  push:
+    branches:
+      - main
+
+jobs:
+  build_multi_platform_images:
+    name: Build Multi-platform Docker Images
+    runs-on: ubuntu-latest
+    
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and push x86 Docker image
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          docker buildx create --use
+          docker buildx build \
+            --file amd64/latest/Dockerfile \
+            --tag moelin/1panel:latest \
+            --platform linux/amd64 \
+            --push .
+
+      - name: Build and push arm64 Docker image
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          docker buildx create --use
+          docker buildx build \
+            --file arm64/latest/Dockerfile \
+            --tag moelin/1panel:latest \
+            --platform linux/arm64 \
+            --push .
