@@ -45,6 +45,6 @@ jobs:
           docker buildx create --use
           docker buildx build \
             --file arm64/latest/Dockerfile \
-            --tag moelin/1panel:latest \
+            --tag moelin/1panel:latest-arm64 \
             --platform linux/arm64 \
             --push .
