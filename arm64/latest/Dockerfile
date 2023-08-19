@@ -36,9 +36,7 @@ WORKDIR /app
 VOLUME /var/run/docker.sock
 
 # 复制必要的文件
-#COPY ./install.sh .
-# workflows
-COPY arm64/latest/install.sh .
+COPY ./install.sh .
 
 # 设置安装模式和架构
 ARG INSTALL_MODE="stable"

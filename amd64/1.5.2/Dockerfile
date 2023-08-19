@@ -38,6 +38,7 @@ VOLUME /var/run/docker.sock
 # 复制必要的文件
 COPY ./install.sh .
 
+
 # 下载并安装 1Panel
 RUN wget https://github.com/wanghe-fit2cloud/1Panel/releases/download/v1.5.2/1panel-v1.5.2-linux-amd64.tar.gz && \
     tar zxvf 1panel-v1.5.2-linux-amd64.tar.gz && \
