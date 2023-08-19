@@ -24,8 +24,8 @@ jobs:
 
       - name: Build and push x86 Docker image
         env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          DOCKER_USERNAME: ${{ secrets.DOCKERUSERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKERPASSWORD }}
         run: |
           docker buildx create --use
           docker buildx build \
@@ -36,8 +36,8 @@ jobs:
 
       - name: Build and push arm64 Docker image
         env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          DOCKER_USERNAME: ${{ secrets.DOCKERUSERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKERPASSWORD }}
         run: |
           docker buildx create --use
           docker buildx build \
