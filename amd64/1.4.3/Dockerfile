@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     unzip \
     curl \
     gnupg \
+    git \
     #openssh-server \
     apt-transport-https \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
