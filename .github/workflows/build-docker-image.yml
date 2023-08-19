@@ -25,6 +25,30 @@ jobs:
       - name: Log in to Docker Hub
         run: echo "${{ secrets.DOCKERPASSWORD }}" | docker login -u "${{ secrets.DOCKERUSERNAME }}" --password-stdin
 
+      #- name: Build and push x86 1.4.3 Docker image
+      #  env:
+      #    DOCKER_USERNAME: ${{ secrets.DOCKERUSERNAME }}
+      #    DOCKER_PASSWORD: ${{ secrets.DOCKERPASSWORD }}
+      #  run: |
+      #    docker buildx create --use
+      #    docker buildx build \
+      #      --file amd64/1.4.3/Dockerfile \
+      #      --tag moelin/1panel:1.4.3 \
+      #      --platform linux/amd64 \
+      #      --push .
+
+      #- name: Build and push x86 1.5.2 Docker image
+      #  env:
+      #    DOCKER_USERNAME: ${{ secrets.DOCKERUSERNAME }}
+      #    DOCKER_PASSWORD: ${{ secrets.DOCKERPASSWORD }}
+      #  run: |
+      #    docker buildx create --use
+      #    docker buildx build \
+      #      --file amd64/1.5.2/Dockerfile \
+      #      --tag moelin/1panel:1.5.2 \
+      #      --platform linux/amd64 \
+      #      --push .
+
       - name: Build and push x86 Docker image
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKERUSERNAME }}
@@ -47,4 +71,16 @@ jobs:
             --file arm64/latest/Dockerfile \
             --tag moelin/1panel:latest-arm64 \
             --platform linux/arm64 \
+            --push .
+
+      - name: Build and push armv7 Docker image
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKERUSERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKERPASSWORD }}
+        run: |
+          docker buildx create --use
+          docker buildx build \
+            --file armv7/latest/Dockerfile \
+            --tag moelin/1panel:latest-armv7 \
+            --platform linux/arm/v7 \
             --push .
