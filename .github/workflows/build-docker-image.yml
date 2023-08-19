@@ -84,3 +84,15 @@ jobs:
             --tag moelin/1panel:latest-armv7 \
             --platform linux/arm/v7 \
             --push .
+
+      - name: Build and push ppc64le Docker image
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKERUSERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKERPASSWORD }}
+        run: |
+          docker buildx create --use
+          docker buildx build \
+            --file ppc64le/latest/Dockerfile \
+            --tag moelin/1panel:latest-ppc64le \
+            --platform linux/ppc64le \
+            --push .

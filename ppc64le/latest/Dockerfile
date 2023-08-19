@@ -18,7 +18,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # 设置 Docker 仓库
 RUN curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg && \
-    echo "deb [arch=armhf signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian bullseye stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+    echo "deb [arch=ppc64le signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian bullseye stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
 
 # 安装 Docker CLI
 RUN apt-get update && apt-get install -y docker-ce-cli && \
@@ -38,11 +38,11 @@ VOLUME /var/run/docker.sock
 # 复制必要的文件
 #COPY ./install.sh .
 # workflows
-COPY armv7/latest/install.sh .
+COPY ppc64le/latest/install.sh .
 
 # 设置安装模式和架构
 ARG INSTALL_MODE="stable"
-ARG architecture="armv7"
+ARG architecture="ppc64le"
 
 # 下载并安装 1Panel
 RUN VERSION=$(curl -s https://resource.fit2cloud.com/1panel/package/${INSTALL_MODE}/latest) && \
