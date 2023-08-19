@@ -32,8 +32,30 @@
   - `TZ=Asia/Shanghai`                        时区设置
   - `1panel`                          容器名
 ***
+**架构平台对应镜像**
+- amd64
+```
+docker pull moelin/1panel:latest
+```
+- arm64
+```
+docker pull moelin/1panel:latest-arm64
+```
+- armv7
+```
+docker pull moelin/1panel:latest-armv7
+```
+- ppc64le
+```
+docker pull moelin/1panel:latest-ppc64le
+```
+- s390x
+```
+docker pull moelin/1panel:latest-s390x
+```
 ## 2. docker方式安装
 ```
+# amd64
 docker run -d \
     --name 1panel \
     --restart always \
@@ -48,6 +70,7 @@ docker run -d \
 
 创建一个`docker-compose.yml`文件，内容类似如下
 ```
+# amd64
 version: '3'
 services:
   1panel:
