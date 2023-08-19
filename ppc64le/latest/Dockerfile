@@ -19,6 +19,9 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 # 安装 Docker
 RUN curl -fsSL https://get.docker.com | bash -s docker
 
+# 清理
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # 安装 Docker Compose
 RUN curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && \
     ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose  && \
