@@ -96,3 +96,15 @@ jobs:
             --tag moelin/1panel:latest-ppc64le \
             --platform linux/ppc64le \
             --push .
+
+      - name: Build and push s390x Docker image
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKERUSERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKERPASSWORD }}
+        run: |
+          docker buildx create --use
+          docker buildx build \
+            --file s390x/latest/Dockerfile \
+            --tag moelin/1panel:latest-s390x \
+            --platform linux/s390x \
+            --push .
