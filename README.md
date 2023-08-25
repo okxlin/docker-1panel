@@ -10,7 +10,6 @@
 
 单主程序的好处了，正好是和之前适配[1Panel 应用商店的非官方应用适配库](https://github.com/okxlin/appstore)写的`GO`语言的应用的`Dockerfile`异曲同工。
 
-***
 ## 1. 注意事项
 
 由于容器内部`systemd`限制，部分功能目前尚不完整，等待后面找一个好使的`systemctl`镜像来运行。
@@ -28,7 +27,8 @@
   - `/var/run/docker.sock`的相关映射
  ***
 - 可调整参数
-  - `/www/data/1panel-data:/opt`                        文件存储映射
+> **推荐使用/opt路径，否则有些调用本地文件的应用可能出现异常**
+  - `/opt:/opt`                        文件存储映射
   - `TZ=Asia/Shanghai`                        时区设置
   - `1panel`                          容器名
 ***
@@ -61,7 +61,7 @@ docker run -d \
     --restart always \
     --network host \
     -v /var/run/docker.sock:/var/run/docker.sock \
-    -v /www/data/1panel-data:/opt \
+    -v /opt:/opt \
     -e TZ=Asia/Shanghai \
     moelin/1panel:latest
 ```
@@ -79,7 +79,7 @@ services:
     network_mode: "host"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /www/data/1panel-data:/opt  # 文件存储映射
+      - /opt:/opt  # 文件存储映射
     environment:
       - TZ=Asia/Shanghai  # 时区设置
     image: moelin/1panel:latest
@@ -108,19 +108,19 @@ apt-get install sqlite3 -y
 
 在宿主机上的实际路径，假设如下
 ```
-/www/data/1panel-data
+/opt
 ```
 
 - 备份旧数据库
 ```
 # 将原始数据库文件备份为 .bak 文件
-cp /www/data/1panel-data/1panel/db/1Panel.db /www/data/1panel-data/1panel/db/1Panel.db.bak
+cp /opt/1panel/db/1Panel.db /opt/1panel/db/1Panel.db.bak
 ```
 
 - 打开数据库文件
 ```
 # 打开 SQLite3 数据库
-sqlite3 /www/data/1panel-data/1panel/db/1Panel.db
+sqlite3 /opt/1panel/db/1Panel.db
 ```
 
 - 修改版本信息，按需修改`v1.5.2`
