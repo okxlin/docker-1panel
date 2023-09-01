@@ -1,7 +1,9 @@
 name: Build Docker-1Panel
 on:
-  #schedule:
-  #  - cron: "0 16 * * *"  # 每天的东八区时间 00:00 执行
+  schedule:
+    - cron: "0 14 * * 2"  # 每周二（星期二）北京时间22:00执行
+    - cron: "0 11 * * 5"  # 每周五（星期五）北京时间19:00执行
+  #  - cron: "0 16 * * *"  # 每天的北京时间 00:00 执行
   push:
     branches:
       - main
