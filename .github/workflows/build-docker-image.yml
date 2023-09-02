@@ -47,7 +47,6 @@ jobs:
         with:
           push: true
           build-args: |
-            INSTALL_MODE=stable
             PANELVER=${{ steps.get_version.outputs.PANELVER }}
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/1panel:${{ steps.get_version.outputs.PANELVER }}, ${{ secrets.DOCKERHUB_USERNAME }}/1panel:latest
@@ -58,7 +57,28 @@ jobs:
         with:
           push: true
           build-args: |
-            INSTALL_MODE=stable
             PANELVER=${{ steps.get_version.outputs.PANELVER }}
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/1panel:${{ steps.get_version.outputs.PANELVER }}
+      -
+        name: Build and push (S390X)
+        uses: docker/build-push-action@v4
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          push: true
+          build-args: |
+            PANELVER=${{ steps.get_version.outputs.PANELVER }}
+          platforms: linux/s390x
+          file: Dockerfile-s390x
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/1panel:${{ steps.get_version.outputs.PANELVER }}-s390x, ${{ secrets.DOCKERHUB_USERNAME }}/1panel:latest-s390x
+      -
+        name: Build and push (Manually, S390X)
+        uses: docker/build-push-action@v4
+        if: github.event_name == 'workflow_dispatch'
+        with:
+          push: true
+          build-args: |
+            PANELVER=${{ steps.get_version.outputs.PANELVER }}
+          platforms: linux/s390x
+          file: Dockerfile-s390x
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/1panel:${{ steps.get_version.outputs.PANELVER }}-s390x
