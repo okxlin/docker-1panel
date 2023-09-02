@@ -1,18 +1,22 @@
-name: Build Docker-1Panel
+name: Build 1Panel Docker Image
 on:
   schedule:
     - cron: "0 14 * * 2"  # 每周二（星期二）北京时间22:00执行
     - cron: "0 11 * * 5"  # 每周五（星期五）北京时间19:00执行
   #  - cron: "0 16 * * *"  # 每天的北京时间 00:00 执行
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "1Panel Version (Empty for latest)"
+        type: string
   push:
     branches:
       - main
 
 jobs:
-  build_multi_platform_images:
-    name: Build Multi-platform Docker Images
+  build_images:
+    name: Build Multi-platform Images
     runs-on: ubuntu-latest
-    
     steps:
       -
         name: Checkout
@@ -23,90 +27,38 @@ jobs:
       -
         name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-
-      - name: Log in to Docker Hub
-        run: echo "${{ secrets.DOCKERPASSWORD }}" | docker login -u "${{ secrets.DOCKERUSERNAME }}" --password-stdin
-
-      #- name: Build and push x86 1.4.3 Docker image
-      #  env:
-      #    DOCKER_USERNAME: ${{ secrets.DOCKERUSERNAME }}
-      #    DOCKER_PASSWORD: ${{ secrets.DOCKERPASSWORD }}
-      #  run: |
-      #    docker buildx create --use
-      #    docker buildx build \
-      #      --file amd64/1.4.3/Dockerfile \
-      #      --tag moelin/1panel:1.4.3 \
-      #      --platform linux/amd64 \
-      #      --push .
-
-      #- name: Build and push x86 1.5.2 Docker image
-      #  env:
-      #    DOCKER_USERNAME: ${{ secrets.DOCKERUSERNAME }}
-      #    DOCKER_PASSWORD: ${{ secrets.DOCKERPASSWORD }}
-      #  run: |
-      #    docker buildx create --use
-      #    docker buildx build \
-      #      --file amd64/1.5.2/Dockerfile \
-      #      --tag moelin/1panel:1.5.2 \
-      #      --platform linux/amd64 \
-      #      --push .
-
-      - name: Build and push x86 Docker image
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKERUSERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKERPASSWORD }}
+      -
+        name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      -
+        name: Get Version
+        id: get_version
         run: |
-          docker buildx create --use
-          docker buildx build \
-            --file amd64/latest/Dockerfile \
-            --tag moelin/1panel:latest \
-            --platform linux/amd64 \
-            --push .
-
-      - name: Build and push arm64 Docker image
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKERUSERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKERPASSWORD }}
-        run: |
-          docker buildx create --use
-          docker buildx build \
-            --file arm64/latest/Dockerfile \
-            --tag moelin/1panel:latest-arm64 \
-            --platform linux/arm64 \
-            --push .
-
-      - name: Build and push armv7 Docker image
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKERUSERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKERPASSWORD }}
-        run: |
-          docker buildx create --use
-          docker buildx build \
-            --file armv7/latest/Dockerfile \
-            --tag moelin/1panel:latest-armv7 \
-            --platform linux/arm/v7 \
-            --push .
-
-      - name: Build and push ppc64le Docker image
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKERUSERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKERPASSWORD }}
-        run: |
-          docker buildx create --use
-          docker buildx build \
-            --file ppc64le/latest/Dockerfile \
-            --tag moelin/1panel:latest-ppc64le \
-            --platform linux/ppc64le \
-            --push .
-
-      - name: Build and push s390x Docker image
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKERUSERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKERPASSWORD }}
-        run: |
-          docker buildx create --use
-          docker buildx build \
-            --file s390x/latest/Dockerfile \
-            --tag moelin/1panel:latest-s390x \
-            --platform linux/s390x \
-            --push .
+          VER_INPUT=${{ github.event.inputs.version }}
+          VER_LATEST=$(curl -fsSL https://resource.fit2cloud.com/1panel/package/stable/latest)
+          if [ -z "${VER_INPUT}" ]; then echo "PANELVER=${VER_LATEST}" >> $GITHUB_OUTPUT; else echo "PANELVER=${VER_INPUT}" >> $GITHUB_OUTPUT; fi
+      -
+        name: Build and push
+        uses: docker/build-push-action@v4
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          push: true
+          build-args: |
+            INSTALL_MODE=stable
+            PANELVER=${{ steps.get_version.outputs.PANELVER }}
+          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/1panel:${{ steps.get_version.outputs.PANELVER }}, ${{ secrets.DOCKERHUB_USERNAME }}/1panel:latest
+      -
+        name: Build and push (Manually)
+        uses: docker/build-push-action@v4
+        if: github.event_name == 'workflow_dispatch'
+        with:
+          push: true
+          build-args: |
+            INSTALL_MODE=stable
+            PANELVER=${{ steps.get_version.outputs.PANELVER }}
+          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/1panel:${{ steps.get_version.outputs.PANELVER }}
