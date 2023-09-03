@@ -73,8 +73,8 @@ RUN apt-get update && apt-get install -y \
     curl \
     git \
     sudo \
-    apt-get clean && rm -rf /var/lib/apt/lists/* && \
-    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+    && apt-get clean && rm -rf /var/lib/apt/lists/* \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # 设置工作目录
 WORKDIR /
