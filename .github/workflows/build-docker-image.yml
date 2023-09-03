@@ -3,7 +3,6 @@ on:
   schedule:
     - cron: "0 14 * * 2"  # 每周二（星期二）北京时间22:00执行
     - cron: "0 11 * * 5"  # 每周五（星期五）北京时间19:00执行
-  #  - cron: "0 16 * * *"  # 每天的北京时间 00:00 执行
   workflow_dispatch:
     inputs:
       version:
@@ -41,44 +40,22 @@ jobs:
           VER_LATEST=$(curl -fsSL https://resource.fit2cloud.com/1panel/package/stable/latest)
           if [ -z "${VER_INPUT}" ]; then echo "PANELVER=${VER_LATEST}" >> $GITHUB_OUTPUT; else echo "PANELVER=${VER_INPUT}" >> $GITHUB_OUTPUT; fi
       -
-        name: Build and push
+        name: Build and push stable
         uses: docker/build-push-action@v4
         if: github.event_name != 'workflow_dispatch'
         with:
           push: true
           build-args: |
             PANELVER=${{ steps.get_version.outputs.PANELVER }}
-          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le
+          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le,linux/s390x
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/1panel:${{ steps.get_version.outputs.PANELVER }}, ${{ secrets.DOCKERHUB_USERNAME }}/1panel:latest
       -
-        name: Build and push (Manually)
+        name: Build and push stable (Manually)
         uses: docker/build-push-action@v4
         if: github.event_name == 'workflow_dispatch'
         with:
           push: true
           build-args: |
             PANELVER=${{ steps.get_version.outputs.PANELVER }}
-          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le
+          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le,linux/s390x
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/1panel:${{ steps.get_version.outputs.PANELVER }}
-      -
-        name: Build and push (S390X)
-        uses: docker/build-push-action@v4
-        if: github.event_name != 'workflow_dispatch'
-        with:
-          push: true
-          build-args: |
-            PANELVER=${{ steps.get_version.outputs.PANELVER }}
-          platforms: linux/s390x
-          file: Dockerfile-s390x
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/1panel:${{ steps.get_version.outputs.PANELVER }}-s390x, ${{ secrets.DOCKERHUB_USERNAME }}/1panel:latest-s390x
-      -
-        name: Build and push (Manually, S390X)
-        uses: docker/build-push-action@v4
-        if: github.event_name == 'workflow_dispatch'
-        with:
-          push: true
-          build-args: |
-            PANELVER=${{ steps.get_version.outputs.PANELVER }}
-          platforms: linux/s390x
-          file: Dockerfile-s390x
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/1panel:${{ steps.get_version.outputs.PANELVER }}-s390x
