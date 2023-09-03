@@ -26,12 +26,10 @@ RUN curl -L "https://github.com/docker/compose/releases/latest/download/docker-c
 # 设置工作目录
 WORKDIR /app
 
-# 创建 Docker 套接字的卷
-VOLUME /var/run/docker.sock
-
 # 复制必要的文件
 COPY ./install.override.sh .
 
+# 定义版本
 ARG PANELVER=$PANELVER
 
 # 下载并安装 1Panel

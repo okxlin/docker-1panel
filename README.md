@@ -1,3 +1,14 @@
+- [简介](#简介)
+- [1. 注意事项](#1-注意事项)
+- [2. docker方式安装](#2-docker方式安装)
+- [3. docker-compose方式安装](#3-docker-compose方式安装)
+- [4. 修改面板显示版本](#4-修改面板显示版本)
+  - [4.1 安装`SQLite3`](#41-安装sqlite3)
+  - [4.2 修改面板显示版本](#42-修改面板显示版本)
+- [5. 镜像编译](#5-镜像编译)
+
+***
+
 ## 简介
 
 偶然看到[**1panel-dood**](https://github.com/tangger2000/1panel-dood)的关于`docker`部署`1panel`的方法，确实好想法，点赞。
@@ -34,28 +45,17 @@
 ***
 **架构平台对应镜像**
 - amd64
+- arm64
+- armv7
+- ppc64le
+- s390x
+> 2023年9月3日已经更新单标签多镜像
 ```
 docker pull moelin/1panel:latest
 ```
-- arm64
-```
-docker pull moelin/1panel:latest-arm64
-```
-- armv7
-```
-docker pull moelin/1panel:latest-armv7
-```
-- ppc64le
-```
-docker pull moelin/1panel:latest-ppc64le
-```
-- s390x
-```
-docker pull moelin/1panel:latest-s390x
-```
+
 ## 2. docker方式安装
 ```
-# amd64
 docker run -d \
     --name 1panel \
     --restart always \
@@ -70,7 +70,6 @@ docker run -d \
 
 创建一个`docker-compose.yml`文件，内容类似如下
 ```
-# amd64
 version: '3'
 services:
   1panel:
@@ -138,4 +137,16 @@ WHERE key = 'SystemVersion';
 ```
 # 重新启动 1panel 容器
 docker restart 1panel
+```
+
+## 5. 镜像编译
+
+```
+docker build --build-arg PANELVER=your_desired_version -t your_image_name:tag .
+
+```
+例子：
+```
+docker build --build-arg PANELVER=v1.4.3 -t 1panel:1.4.3 .
+
 ```
