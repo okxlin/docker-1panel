@@ -42,6 +42,7 @@
   - `/opt:/opt`                        文件存储映射
   - `TZ=Asia/Shanghai`                        时区设置
   - `1panel`                          容器名
+  - `/var/lib/docker/volumes:/var/lib/docker/volumes` 存储卷映射
 ***
 **架构平台对应镜像**
 - amd64
@@ -61,6 +62,7 @@ docker run -d \
     --restart always \
     --network host \
     -v /var/run/docker.sock:/var/run/docker.sock \
+    -v /var/lib/docker/volumes:/var/lib/docker/volumes \
     -v /opt:/opt \
     -e TZ=Asia/Shanghai \
     moelin/1panel:latest
@@ -78,6 +80,7 @@ services:
     network_mode: "host"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/volumes:/var/lib/docker/volumes
       - /opt:/opt  # 文件存储映射
     environment:
       - TZ=Asia/Shanghai  # 时区设置
