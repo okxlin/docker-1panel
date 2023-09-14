@@ -58,4 +58,4 @@ jobs:
           build-args: |
             PANELVER=${{ steps.get_version.outputs.PANELVER }}
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le,linux/s390x
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/1panel:${{ steps.get_version.outputs.PANELVER }}
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/1panel:${{ steps.get_version.outputs.PANELVER }}, ${{ secrets.DOCKERHUB_USERNAME }}/1panel:latest
