@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y \
     git \
     sudo \
     gnupg \
+    sqlite3 \
     tzdata \
     && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg && \
@@ -31,9 +32,13 @@ WORKDIR /app
 
 # 复制必要的文件
 COPY ./install.override.sh .
+COPY ./update_app_version.sh .
 
 # 定义版本参数
 ARG PANELVER=$PANELVER
+
+# 设置环境变量
+ENV PANELVER=$PANELVER
 
 # 下载并安装 1Panel
 RUN INSTALL_MODE="stable" && \
@@ -48,8 +53,9 @@ RUN INSTALL_MODE="stable" && \
     rm /app/install.sh && \
     mv -f /app/install.override.sh /app/install.sh && \
     chmod +x /app/install.sh && \
+    chmod +x /app/update_app_version.sh && \
     bash /app/install.sh && \
-    rm -r /app/*
+    find /app -type f ! -name 'update_app_version.sh' -delete
 
 # 设置工作目录为根目录
 WORKDIR /
@@ -60,5 +66,5 @@ EXPOSE 10086
 # 创建 Docker 套接字的卷
 VOLUME /var/run/docker.sock
 
-# 启动 1Panel
-CMD ["/usr/local/bin/1panel"]
+# 启动
+CMD ["/bin/bash", "-c", "/usr/local/bin/1panel & sleep 3 && kill $(jobs -p) || true && /app/update_app_version.sh && /usr/local/bin/1panel"]
