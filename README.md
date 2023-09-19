@@ -23,9 +23,11 @@
 
 ## 1. 注意事项
 
-由于容器内部`systemd`限制，部分功能目前尚不完整，等待后面找一个好使的`systemctl`镜像来运行。
+由于容器内部`systemd`限制，部分功能目前尚不完整。
 
-如果更新了更高版本的镜像，实际是更新了对应版本的二进制程序，面板显示的相关版本还需要手动更新。
+~~如果更新了更高版本的镜像，实际是更新了对应版本的二进制程序，面板显示的相关版本还需要手动更新。~~
+
+**20230919：添加自动修改面板显示应用版本，无需手动修改数据库**
 
 相关操作查看下文。
 ***
@@ -148,8 +150,13 @@ docker restart 1panel
 docker build --build-arg PANELVER=your_desired_version -t your_image_name:tag .
 
 ```
-例子：
+- 例子1：
 ```
-docker build --build-arg PANELVER=v1.4.3 -t 1panel:1.4.3 .
+docker build --build-arg PANELVER=v1.4.3 -t 1panel:v1.4.3 .
 
+```
+- 例子2：
+```
+docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le,linux/s390x \
+--build-arg PANELVER=v1.4.3 -t moelin/1panel:v1.4.3 --push .
 ```
