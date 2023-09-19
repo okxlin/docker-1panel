@@ -1,6 +1,9 @@
 # 使用 Ubuntu 22.04 作为基础镜像
 FROM ubuntu:22.04
 
+# 设置环境变量，避免交互式配置
+ARG DEBIAN_FRONTEND=noninteractive
+
 # 设置时区为亚洲/上海
 ENV TZ=Asia/Shanghai
 
@@ -13,6 +16,7 @@ RUN apt-get update && apt-get install -y \
     git \
     sudo \
     gnupg \
+    tzdata \
     && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list && \
