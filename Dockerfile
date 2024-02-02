@@ -56,6 +56,7 @@ RUN INSTALL_MODE="stable" && \
     chmod +x /app/install.sh && \
     chmod +x /app/update_app_version.sh && \
     bash /app/install.sh && \
+    cp /app/1panel.service /etc/systemd/system/1panel.service && \
     find /app -type f ! -name 'update_app_version.sh' -delete
 
 # 设置工作目录为根目录
