@@ -1,3 +1,8 @@
+[![Docker Image Version (latest semver)](https://img.shields.io/docker/v/moelin/1panel/latest?color=%2348BB78&logo=docker&label=version)](https://hub.docker.com/r/moelin/1panel)
+[![Docker Pulls](https://img.shields.io/docker/pulls/moelin/1panel?color=%2348BB78&logo=docker&label=pulls)](https://hub.docker.com/r/moelin/1panel)
+[![Docker Stars](https://img.shields.io/docker/stars/moelin/1panel?color=%2348BB78&logo=docker&label=stars)](https://hub.docker.com/r/moelin/1panel)
+[![GitHub Repo stars](https://img.shields.io/github/stars/okxlin/docker-1panel)](https://star-history.com/#okxlin/docker-1panel&Date)
+
 - [简介](#简介)
 - [1. 注意事项](#1-注意事项)
 - [2. docker方式安装](#2-docker方式安装)
@@ -23,11 +28,14 @@
 
 ## 1. 注意事项
 
-由于容器内部`systemd`限制，部分功能目前尚不完整。
+- 由于容器内部`systemd`限制，部分功能目前尚不完整。
+
+- **<span style="color: #ff0000">不要</span>点击容器化部署的 `1Panel` 右下角进行更新，应该拉取新镜像，再重新部署来应用更新。**
+
+- **20230919：添加自动修改面板显示应用版本，<span style="color: #ff0000">无需</span>手动修改数据库。**
 
 ~~如果更新了更高版本的镜像，实际是更新了对应版本的二进制程序，面板显示的相关版本还需要手动更新。~~
 
-**20230919：添加自动修改面板显示应用版本，无需手动修改数据库**
 
 相关操作查看下文。
 ***
@@ -66,6 +74,7 @@ docker run -d \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -v /var/lib/docker/volumes:/var/lib/docker/volumes \
     -v /opt:/opt \
+    -v /root:/root \
     -e TZ=Asia/Shanghai \
     moelin/1panel:latest
 ```
@@ -84,6 +93,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/lib/docker/volumes:/var/lib/docker/volumes
       - /opt:/opt  # 文件存储映射
+      - /root:/root  # 可选的文件存储映射
     environment:
       - TZ=Asia/Shanghai  # 时区设置
     image: moelin/1panel:latest
