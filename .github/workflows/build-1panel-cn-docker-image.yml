@@ -1,4 +1,4 @@
-name: Build 1Panel Docker Image
+name: Build 1Panel-CN Docker Image
 on:
   schedule:
     - cron: "0 14 * * 2"  # 每周二（星期二）北京时间22:00执行
@@ -45,6 +45,7 @@ jobs:
         if: github.event_name != 'workflow_dispatch'
         with:
           push: true
+          file: ./Dockerfile
           build-args: |
             PANELVER=${{ steps.get_version.outputs.PANELVER }}
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le,linux/s390x
@@ -55,6 +56,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         with:
           push: true
+          file: ./Dockerfile
           build-args: |
             PANELVER=${{ steps.get_version.outputs.PANELVER }}
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le,linux/s390x
