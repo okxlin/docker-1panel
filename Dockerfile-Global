@@ -47,7 +47,7 @@ RUN INSTALL_MODE="stable" && \
     if [ "$ARCH" = "armhf" ]; then ARCH="armv7"; fi && \
     if [ "$ARCH" = "ppc64el" ]; then ARCH="ppc64le"; fi && \
     package_file_name="1panel-${PANELVER}-linux-${ARCH}.tar.gz" && \
-    package_download_url="https://resource.1panel.hk/${INSTALL_MODE}/${PANELVER}/release/${package_file_name}" && \
+    package_download_url="https://resource.1panel.pro/${INSTALL_MODE}/${PANELVER}/release/${package_file_name}" && \
     echo "Downloading ${package_download_url}" && \
     curl -sSL -o ${package_file_name} "$package_download_url" && \
     tar zxvf ${package_file_name} --strip-components 1 && \
