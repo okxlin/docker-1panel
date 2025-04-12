@@ -37,7 +37,7 @@ jobs:
         id: get_version
         run: |
           VER_INPUT=${{ github.event.inputs.version }}
-          VER_LATEST=$(curl -fsSL https://resource.1panel.hk/stable/latest)
+          VER_LATEST=$(curl -fsSL https://resource.1panel.pro/stable/latest)
           if [ -z "${VER_INPUT}" ]; then echo "PANELVER=${VER_LATEST}" >> $GITHUB_OUTPUT; else echo "PANELVER=${VER_INPUT}" >> $GITHUB_OUTPUT; fi
       -
         name: Build and push stable
