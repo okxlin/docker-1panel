@@ -70,21 +70,21 @@ forked from https://github.com/okxlin/docker-1panel
 
 ### V1 中国版 (CN)
 ```bash
-moelin/1panel:v1.10.22    # 具体版本
-moelin/1panel:v1          # 浮动标签 (最新 V1)
+forza0310/1panel:v1.10.22    # 具体版本
+forza0310/1panel:v1          # 浮动标签 (最新 V1)
 ```
 
 ### V1 国际版 (Global)
 ```bash
-moelin/1panel:global-v1.10.22    # 具体版本
-moelin/1panel:global-v1          # 浮动标签 (最新 V1 Global)
+forza0310/1panel:global-v1.10.22    # 具体版本
+forza0310/1panel:global-v1          # 浮动标签 (最新 V1 Global)
 ```
 
 ### V2 中国版 (CN)
 ```bash
-moelin/1panel:v2.0.6      # 具体版本
-moelin/1panel:v2          # 浮动标签 (最新 V2)
-moelin/1panel:latest      # 全局最新 (指向 V2)
+forza0310/1panel:v2.0.6      # 具体版本
+forza0310/1panel:v2          # 浮动标签 (最新 V2)
+forza0310/1panel:latest      # 全局最新 (指向 V2)
 ```
 
 > [!TIP]
@@ -132,7 +132,7 @@ docker run -d \
     -v /opt:/opt \
     -v /root:/root \
     -e TZ=Asia/Shanghai \
-    moelin/1panel:v1
+    forza0310/1panel:v1
 ```
 
 #### 中国版 (CN) - 自定义配置 (v1.10.34-lts+)
@@ -150,7 +150,7 @@ docker run -d \
     -e USERNAME=admin \
     -e PASSWORD=your_secure_password \
     -e ENTRANCE=myentrance \
-    moelin/1panel:v1
+    forza0310/1panel:v1
 ```
 
 #### 国际版 (Global) - 基础安装
@@ -164,7 +164,7 @@ docker run -d \
     -v /opt:/opt \
     -v /root:/root \
     -e TZ=Asia/Shanghai \
-    moelin/1panel:global-v1
+    forza0310/1panel:global-v1
 ```
 
 #### 国际版 (Global) - 自定义配置 (v1.10.34-lts+)
@@ -182,7 +182,7 @@ docker run -d \
     -e USERNAME=admin \
     -e PASSWORD=your_secure_password \
     -e ENTRANCE=myentrance \
-    moelin/1panel:global-v1
+    forza0310/1panel:global-v1
 ```
 
 ### V1 Docker Compose 安装
@@ -205,7 +205,7 @@ services:
       - /root:/root
     environment:
       - TZ=Asia/Shanghai
-    image: moelin/1panel:v1
+    image: forza0310/1panel:v1
     labels:
       createdBy: "Apps"
 ```
@@ -231,7 +231,7 @@ services:
       - PASSWORD=your_secure_password
       - ENTRANCE=myentrance
       - BASE_DIR=/opt
-    image: moelin/1panel:v1
+    image: forza0310/1panel:v1
     labels:
       createdBy: "Apps"
 ```
@@ -323,7 +323,7 @@ docker run -d \
     -e USERNAME=admin \
     -e PASSWORD=your_secure_password \
     -e ENTRANCE=myentrance \
-    moelin/1panel:v2
+    forza0310/1panel:v2
 ```
 
 ### V2 Docker Compose 安装
@@ -347,7 +347,7 @@ services:
       - PASSWORD=your_secure_password
       - ENTRANCE=myentrance
       - BASE_DIR=/opt
-    image: moelin/1panel:v2
+    image: forza0310/1panel:v2
     labels:
       createdBy: "Apps"
 ```
