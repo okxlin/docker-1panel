@@ -1,9 +1,10 @@
 # 1Panel Docker 镜像
+forked from https://github.com/okxlin/docker-1panel
 
-[![Docker Image Version (latest semver)](https://img.shields.io/docker/v/moelin/1panel/latest?color=%2348BB78&logo=docker&label=version)](https://hub.docker.com/r/moelin/1panel)
-[![Docker Pulls](https://img.shields.io/docker/pulls/moelin/1panel?color=%2348BB78&logo=docker&label=pulls)](https://hub.docker.com/r/moelin/1panel)
-[![Docker Stars](https://img.shields.io/docker/stars/moelin/1panel?color=%2348BB78&logo=docker&label=stars)](https://hub.docker.com/r/moelin/1panel)
-[![GitHub Repo stars](https://img.shields.io/github/stars/okxlin/docker-1panel)](https://github.com/okxlin/docker-1panel)
+[![Docker Image Version (latest semver)](https://img.shields.io/docker/v/forza0310/1panel/latest?color=%2348BB78&logo=docker&label=version)](https://hub.docker.com/repository/docker/forza0310/1panel/)
+[![Docker Pulls](https://img.shields.io/docker/pulls/forza0310/1panel?color=%2348BB78&logo=docker&label=pulls)](https://hub.docker.com/repository/docker/forza0310/1panel/)
+[![Docker Stars](https://img.shields.io/docker/stars/forza0310/1panel?color=%2348BB78&logo=docker&label=stars)](https://hub.docker.com/repository/docker/forza0310/1panel/)
+[![GitHub Repo stars](https://img.shields.io/github/stars/forza0310/docker-1panel)](https://github.com/forza0310/docker-1panel)
 
 > [!CAUTION]
 > **重要提示**: 1Panel V2 版本与 V1 版本**无法直接跨版本升级**！
@@ -14,13 +15,6 @@
 >
 > 脚本下载链接:
 > [GitHub](https://raw.githubusercontent.com/okxlin/ToolScript/refs/heads/main/1Panel/1panel-execution-mode/1panel_docker_to_sys.sh) |
-> [cdn.jsdelivr.net](https://cdn.jsdelivr.net/gh/okxlin/ToolScript@main/1Panel/1panel-execution-mode/1panel_docker_to_sys.sh) |
-> [testingcf.jsdelivr.net](https://testingcf.jsdelivr.net/gh/okxlin/ToolScript@main/1Panel/1panel-execution-mode/1panel_docker_to_sys.sh) |
-> [quantil.jsdelivr.net](https://quantil.jsdelivr.net/gh/okxlin/ToolScript@main/1Panel/1panel-execution-mode/1panel_docker_to_sys.sh) |
-> [fastly.jsdelivr.net](https://fastly.jsdelivr.net/gh/okxlin/ToolScript@main/1Panel/1panel-execution-mode/1panel_docker_to_sys.sh) |
-> [purge.jsdelivr.net](https://purge.jsdelivr.net/gh/okxlin/ToolScript@main/1Panel/1panel-execution-mode/1panel_docker_to_sys.sh) |
-> [gcore.jsdelivr.net](https://gcore.jsdelivr.net/gh/okxlin/ToolScript@main/1Panel/1panel-execution-mode/1panel_docker_to_sys.sh) |
-> [originfastly.jsdelivr.net](https://originfastly.jsdelivr.net/gh/okxlin/ToolScript@main/1Panel/1panel-execution-mode/1panel_docker_to_sys.sh)
 
 ## 📑 目录
 
@@ -455,14 +449,7 @@ docker buildx build \
 > ```bash
 > # GitHub 源
 > wget -O 1panel_docker_to_sys.sh https://raw.githubusercontent.com/okxlin/ToolScript/refs/heads/main/1Panel/1panel-execution-mode/1panel_docker_to_sys.sh
-> # jsDelivr 源 (以下任选其一，国内加速)
-> wget -O 1panel_docker_to_sys.sh https://cdn.jsdelivr.net/gh/okxlin/ToolScript@main/1Panel/1panel-execution-mode/1panel_docker_to_sys.sh
-> wget -O 1panel_docker_to_sys.sh https://testingcf.jsdelivr.net/gh/okxlin/ToolScript@main/1Panel/1panel-execution-mode/1panel_docker_to_sys.sh
-> wget -O 1panel_docker_to_sys.sh https://quantil.jsdelivr.net/gh/okxlin/ToolScript@main/1Panel/1panel-execution-mode/1panel_docker_to_sys.sh
-> wget -O 1panel_docker_to_sys.sh https://fastly.jsdelivr.net/gh/okxlin/ToolScript@main/1Panel/1panel-execution-mode/1panel_docker_to_sys.sh
-> wget -O 1panel_docker_to_sys.sh https://purge.jsdelivr.net/gh/okxlin/ToolScript@main/1Panel/1panel-execution-mode/1panel_docker_to_sys.sh
-> wget -O 1panel_docker_to_sys.sh https://gcore.jsdelivr.net/gh/okxlin/ToolScript@main/1Panel/1panel-execution-mode/1panel_docker_to_sys.sh
-> wget -O 1panel_docker_to_sys.sh https://originfastly.jsdelivr.net/gh/okxlin/ToolScript@main/1Panel/1panel-execution-mode/1panel_docker_to_sys.sh
+
 > # 下载完成后，添加执行权限并运行
 > chmod +x 1panel_docker_to_sys.sh && bash 1panel_docker_to_sys.sh
 > ```
@@ -505,9 +492,9 @@ docker logs -f 1panel-v2
 - [1Panel 官网](https://1panel.cn)
 - [1Panel 文档](https://1panel.cn/docs)
 - [1Panel GitHub](https://github.com/1Panel-dev/1Panel)
-- [Docker Hub](https://hub.docker.com/r/moelin/1panel)
-- [本项目 GitHub](https://github.com/okxlin/docker-1panel)
-- [应用商店适配库](https://github.com/okxlin/appstore)
+- [源项目 GitHub](https://github.com/okxlin/docker-1panel)
+- [本项目 GitHub](https://github.com/forza0310/docker-1panel)
+- [Docker Hub](https://hub.docker.com/r/forza0310/1panel)
 
 ---
 
