@@ -67,7 +67,9 @@ setup_symlink() {
 
 init_offline() {
     if [ -f "/usr/local/bin/1pctl" ]; then
-        sed -i "s|BASE_DIR=.*|BASE_DIR=${INT_DIR}|g" /usr/local/bin/1pctl
+        # 1Panel 通过宿主机 docker.sock 创建业务容器，挂载源路径必须写成宿主机真实路径。
+        # 这里要用 BASE_DIR(外部路径)，不能写死成容器内的 /opt。
+        sed -i "s|BASE_DIR=.*|BASE_DIR=${EXT_DIR}|g" /usr/local/bin/1pctl
         sed -i "s|ORIGINAL_PORT=.*|ORIGINAL_PORT=${PORT}|g" /usr/local/bin/1pctl
         sed -i "s|ORIGINAL_ENTRANCE=.*|ORIGINAL_ENTRANCE=/${ENT}|g" /usr/local/bin/1pctl
         sed -i "s|ORIGINAL_USERNAME=.*|ORIGINAL_USERNAME=${USER}|g" /usr/local/bin/1pctl
