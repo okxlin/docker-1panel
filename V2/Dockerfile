@@ -1,8 +1,9 @@
-FROM ubuntu:22.04
+FROM ubuntu:26.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG INSTALL_MODE="stable"
 ARG PANELVER=""
+ARG PANEL_EDITION="cn"
 ENV TZ=Asia/Shanghai
 
 LABEL org.opencontainers.image.version="${PANELVER}" \
@@ -47,6 +48,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh && \
     rm package.tar.gz && \
     mv /app/1pctl.custom /app/1pctl && \
     sed -i "s|ORIGINAL_VERSION=.*|ORIGINAL_VERSION=${PANELVER}|g" /app/1pctl && \
+    sed -i "s|^PANEL_EDITION=.*|PANEL_EDITION=${PANEL_EDITION}|g" /app/1pctl && \
     chmod +x 1pctl && \
     bash install-v2.override.sh && \
     mkdir -p /opt/1panel/tmp /opt/1panel/db /opt/1panel/log && \

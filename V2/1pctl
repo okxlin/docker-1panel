@@ -3,14 +3,16 @@
 action=$1
 target=$2
 args=$@
+extra_args=("${@:3}")
 
 BASE_DIR=directory
 ORIGINAL_PORT=port
-ORIGINAL_VERSION=v2.0.15
+ORIGINAL_VERSION=v2.2.2
 ORIGINAL_ENTRANCE=entrance
 ORIGINAL_USERNAME=username
 ORIGINAL_PASSWORD=password
 LANGUAGE=en
+PANEL_EDITION=cn
 
 if [ -f "/usr/local/bin/lang/$LANGUAGE.sh" ]; then
     source "/usr/local/bin/lang/$LANGUAGE.sh"
@@ -65,6 +67,7 @@ function usage() {
     echo -e "  ${GREEN}restart${NC} [core|agent|all]    ${YELLOW}$TXT_PANEL_SERVICE_RESTART${NC}"
     echo -e "  ${RED}uninstall${NC}                   ${YELLOW}$TXT_PANEL_SERVICE_UNINSTALL${NC}"
     echo -e "  ${GREEN}user-info${NC}                   ${YELLOW}$TXT_PANEL_SERVICE_USER_INFO${NC}"
+    echo -e "  ${GREEN}user-list${NC}                   ${YELLOW}$TXT_PANEL_SERVICE_USER_LIST${NC}"
     echo -e "  ${GREEN}listen-ip${NC}                   ${YELLOW}$TXT_PANEL_SERVICE_LISTEN_IP${NC}"
     echo -e "  ${GREEN}version${NC}                     ${YELLOW}$TXT_PANEL_SERVICE_VERSION${NC}"
     echo -e "  ${GREEN}update${NC}                      ${YELLOW}$TXT_PANEL_SERVICE_UPDATE${NC}"
@@ -288,6 +291,12 @@ function user-info() {
     generate_border_line 60 "-" "$BLUE"
 }
 
+function user-list() {
+    print_centered_title "$TXT_PANEL_SERVICE_USER_LIST" 60 "=" "$BLUE"
+    1panel -l $LANGUAGE user-list
+    generate_border_line 60 "-" "$BLUE"
+}
+
 function listen-ip() {
     print_centered_title "$TXT_PANEL_SERVICE_LISTEN_IP" 60 "=" "$BLUE"
     case "${target}" in
@@ -312,6 +321,19 @@ function restore() {
     print_centered_title "$TXT_PANEL_SERVICE_RESTORE" 60 "=" "$YELLOW"
     check_root
     while true; do
+        read -p "$TXT_PANEL_SERVICE_RESTORE_NODE_NOTICE" yn
+        case "$yn" in
+            [Yy])
+                ;;
+            [Nn])
+                exit 0
+                ;;
+            *)
+                echo -e "$TXT_INVALID_YN_INPUT"
+                continue
+                ;;
+        esac
+
         read -p "$TXT_PANEL_SERVICE_RESTORE_NOTICE" yn
         case "$yn" in
             [Yy])
@@ -355,7 +377,10 @@ function reset() {
             1panel -l $LANGUAGE reset ips
             ;;
         mfa)
-            1panel -l $LANGUAGE reset mfa
+            1panel -l $LANGUAGE reset mfa ${extra_args[@]}
+            ;;
+        passkey)
+            1panel -l $LANGUAGE reset passkey
             ;;
         *)
             1panel -l $LANGUAGE reset
@@ -369,10 +394,10 @@ function update() {
     check_root
     case "${target}" in
         username)
-            1panel -l $LANGUAGE update username
+            1panel -l $LANGUAGE update username ${extra_args[@]}
             ;;
         password)
-            1panel -l $LANGUAGE update password
+            1panel -l $LANGUAGE update password ${extra_args[@]}
             ;;
         port)
             1panel -l $LANGUAGE update port
@@ -406,6 +431,9 @@ function main() {
             ;;
         user-info)
             user-info
+            ;;
+        user-list)
+            user-list
             ;;
         listen-ip)
             listen-ip

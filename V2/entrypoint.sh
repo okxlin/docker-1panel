@@ -102,6 +102,7 @@ init_offline() {
     
     log "同步 Core 配置..."
     if [ -f "${DATA}/db/core.db" ]; then
+        update_db_key "${DATA}/db/core.db" "ServerPort" "$PORT"
         update_db_key "${DATA}/db/core.db" "SystemPort" "$PORT"
     fi
     
@@ -126,7 +127,7 @@ init_offline() {
 }
 
 config_online() {
-    CURRENT_PORT=$(sqlite3 "${DATA}/db/core.db" "SELECT value FROM settings WHERE key='SystemPort';")
+    CURRENT_PORT=$(sqlite3 "${DATA}/db/core.db" "SELECT value FROM settings WHERE key='ServerPort';")
     CURRENT_PORT=${CURRENT_PORT:-10086}
     
     log "等待服务启动 (端口: $CURRENT_PORT)..."
@@ -157,23 +158,20 @@ config_online() {
 set timeout 30
 spawn /usr/local/bin/1pctl update username
 expect {
+    "Update user information:" { send "$USER\r" }
     "user:" { send "$USER\r" }
     timeout { exit 1 }
 }
 expect eof
 spawn /usr/local/bin/1pctl update password
 expect {
+    "Update user password:" { send "$PASS\r" }
     "password:" { send "$PASS\r" }
     timeout { exit 1 }
 }
 expect {
+    "Update user password:" { send "$PASS\r" }
     "password:" { send "$PASS\r" }
-    timeout { exit 1 }
-}
-expect eof
-spawn /usr/local/bin/1pctl update port
-expect {
-    "port:" { send "$PORT\r" }
     timeout { exit 1 }
 }
 expect eof

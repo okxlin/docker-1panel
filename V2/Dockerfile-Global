@@ -3,13 +3,14 @@ FROM ubuntu:26.04
 ARG DEBIAN_FRONTEND=noninteractive
 ARG INSTALL_MODE="stable"
 ARG PANELVER=""
+ARG PANEL_EDITION="intl"
 ENV TZ=Asia/Shanghai
 
 LABEL org.opencontainers.image.version="${PANELVER}" \
-      org.opencontainers.image.source="https://github.com/okxlin/docker-1panel" \
-      org.opencontainers.image.description="1Panel Global Edition Docker Image" \
-      org.opencontainers.image.title="1Panel Global" \
-      org.opencontainers.image.vendor="okxlin"
+    org.opencontainers.image.source="https://github.com/okxlin/docker-1panel" \
+    org.opencontainers.image.description="1Panel V2 Global Edition Docker Image" \
+    org.opencontainers.image.title="1Panel V2 Global" \
+    org.opencontainers.image.vendor="okxlin"
 
 RUN apt-get update && apt-get install -y \
     curl wget tar unzip zip git sudo gnupg sqlite3 tzdata \
@@ -27,40 +28,42 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY ./1pctl /app/1pctl.custom
-COPY ./install-v1.override.sh /app/install-v1.override.sh
+COPY ./install-v2.override.sh /app/install-v2.override.sh
 COPY ./entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY ./supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 RUN chmod +x /usr/local/bin/entrypoint.sh && \
-    chmod +x /app/install-v1.override.sh && \
+    chmod +x /app/install-v2.override.sh && \
     if [ -z "$PANELVER" ]; then \
-        PANELVER=$(curl -s https://resource.1panel.pro/stable/latest); \
+    PANELVER=$(curl -s https://resource.1panel.pro/v2/${INSTALL_MODE}/latest); \
     fi && \
     ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "armhf" ]; then ARCH="armv7"; fi && \
     if [ "$ARCH" = "ppc64el" ]; then ARCH="ppc64le"; fi && \
     PKG_NAME="1panel-${PANELVER}-linux-${ARCH}.tar.gz" && \
-    PKG_URL="https://resource.1panel.pro/${INSTALL_MODE}/${PANELVER}/release/${PKG_NAME}" && \
+    PKG_URL="https://resource.1panel.pro/v2/${INSTALL_MODE}/${PANELVER}/release/${PKG_NAME}" && \
     echo "Downloading ${PKG_URL}..." && \
     curl -sSL -o package.tar.gz "$PKG_URL" && \
     tar zxvf package.tar.gz --strip-components 1 && \
     rm package.tar.gz && \
     mv /app/1pctl.custom /app/1pctl && \
     sed -i "s|ORIGINAL_VERSION=.*|ORIGINAL_VERSION=${PANELVER}|g" /app/1pctl && \
+    sed -i "s|^PANEL_EDITION=.*|PANEL_EDITION=${PANEL_EDITION}|g" /app/1pctl && \
     chmod +x 1pctl && \
-    bash install-v1.override.sh && \
+    bash install-v2.override.sh && \
     mkdir -p /opt/1panel/tmp /opt/1panel/db /opt/1panel/log && \
     mkdir -p /usr/share/1panel-default && \
     echo "Pre-generating database..." && \
-    (timeout 10s /usr/local/bin/1panel || true) && \
-    if [ -f /opt/1panel/db/1Panel.db ]; then \
-        echo "Database generated successfully." && \
-        mv /opt/1panel/* /usr/share/1panel-default/; \
-        rm -rf /opt/1panel/*; \
+    (timeout 10s /usr/local/bin/1panel-core || true) && \
+    (timeout 5s /usr/local/bin/1panel-agent || true) && \
+    if [ -f /opt/1panel/db/core.db ] && [ -f /opt/1panel/db/agent.db ]; then \
+    echo "Database generated successfully." && \
+    mv /opt/1panel/* /usr/share/1panel-default/; \
+    rm -rf /opt/1panel/*; \
     else \
-        echo "Error: Database generation failed. Core log:" && \
-        cat /opt/1panel/log/* || true && \
-        exit 1; \
+    echo "Error: Database generation failed. Core log:" && \
+    cat /opt/1panel/log/* || true && \
+    exit 1; \
     fi && \
     rm -rf /app/*
 
