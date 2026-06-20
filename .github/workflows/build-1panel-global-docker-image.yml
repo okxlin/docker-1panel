@@ -7,54 +7,112 @@ on:
   
   workflow_dispatch:
     inputs:
+      target:
+        description: "选择构建目标 (Select Build Target)"
+        required: true
+        default: "All"
+        type: choice
+        options:
+          - All
+          - V1
+          - V2
       version:
-        description: "指定版本号 (留空则自动获取最新版)"
+        description: "指定版本号 (选择单个目标时使用；All 留空则分别获取最新版)"
         required: false
         type: string
 
 
 jobs:
   build_images:
-    name: Build V1 Global
+    name: Build ${{ matrix.name }} Global
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "V1"
+            context: "./V1"
+            dockerfile: "./V1/Dockerfile-Global"
+            version_url: "https://resource.1panel.pro/stable/latest"
+            tag_channel: "global-v1"
+
+          - name: "V2"
+            context: "./V2"
+            dockerfile: "./V2/Dockerfile-Global"
+            version_url: "https://resource.1panel.pro/v2/stable/latest"
+            tag_channel: "global-v2"
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Check Skipped
+        id: check_skip
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TARGET="${{ inputs.target }}"
+            CURRENT="${{ matrix.name }}"
+            if [[ "$TARGET" != "All" && "$TARGET" != "$CURRENT" ]]; then
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "⏭️ Skipping $CURRENT Global build because user selected $TARGET"
+            else
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        if: steps.check_skip.outputs.skip == 'false'
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        if: steps.check_skip.outputs.skip == 'false'
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v2
+        if: steps.check_skip.outputs.skip == 'false'
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Get Version
         id: get_version
+        if: steps.check_skip.outputs.skip == 'false'
         run: |
-          VER_INPUT=${{ inputs.version }}
+          VER_INPUT="${{ inputs.version }}"
           if [ -n "$VER_INPUT" ]; then
-            echo "PANELVER=${VER_INPUT}" >> $GITHUB_OUTPUT
+            echo "PANELVER=${VER_INPUT}" >> "$GITHUB_OUTPUT"
             echo "👉 Using manual version: ${VER_INPUT}"
           else
-            VER_LATEST=$(curl -fsSL https://resource.1panel.pro/stable/latest)
-            echo "PANELVER=${VER_LATEST}" >> $GITHUB_OUTPUT
+            VER_LATEST=$(curl -fsSL "${{ matrix.version_url }}")
+            echo "PANELVER=${VER_LATEST}" >> "$GITHUB_OUTPUT"
             echo "🔎 Detected latest version: ${VER_LATEST}"
           fi
 
-      - name: Build and push V1 Global
-        uses: docker/build-push-action@v4
+      - name: Generate Tags
+        id: meta
+        if: steps.check_skip.outputs.skip == 'false'
+        run: |
+          VERSION="${{ steps.get_version.outputs.PANELVER }}"
+          USERNAME="${{ secrets.DOCKERHUB_USERNAME }}"
+          TAG_CHANNEL="${{ matrix.tag_channel }}"
+
+          TAGS="${USERNAME}/1panel:global-${VERSION}"
+          TAGS="${TAGS},${USERNAME}/1panel:${TAG_CHANNEL}"
+
+          echo "Generated Tags: $TAGS"
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push ${{ matrix.name }} Global
+        uses: docker/build-push-action@v6
+        if: steps.check_skip.outputs.skip == 'false'
         with:
           push: true
-          context: ./V1
-          file: ./V1/Dockerfile-Global
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           build-args: |
             PANELVER=${{ steps.get_version.outputs.PANELVER }}
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le,linux/s390x
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/1panel:global-${{ steps.get_version.outputs.PANELVER }},${{ secrets.DOCKERHUB_USERNAME }}/1panel:global-v1
-
+          tags: ${{ steps.meta.outputs.tags }}
