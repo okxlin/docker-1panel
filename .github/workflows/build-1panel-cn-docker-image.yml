@@ -85,12 +85,22 @@ jobs:
         id: get_version
         if: steps.check_skip.outputs.skip == 'false'
         run: |
+          validate_version() {
+            local version="$1"
+            if [[ -z "$version" || ! "$version" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; then
+              echo "::error::Invalid 1Panel version: ${version}"
+              exit 1
+            fi
+          }
+
           VER_INPUT="${{ inputs.version }}"
           if [ -n "$VER_INPUT" ]; then
+            validate_version "$VER_INPUT"
             echo "PANELVER=${VER_INPUT}" >> "$GITHUB_OUTPUT"
             echo "👉 Using manual version: ${VER_INPUT}"
           else
             VER_LATEST=$(curl -fsSL "${{ matrix.version_url }}")
+            validate_version "$VER_LATEST"
             echo "PANELVER=${VER_LATEST}" >> "$GITHUB_OUTPUT"
             echo "🔎 Detected latest version: ${VER_LATEST}"
           fi

@@ -354,7 +354,7 @@ function restore() {
 
 function version() {
     print_centered_title "$TXT_PANEL_SERVICE_VERSION" 60 "-" "$BLUE"
-    1panel -l $LANGUAGE version
+    1panel -l "$LANGUAGE" version
     generate_border_line 60 "-" "$BLUE"
 }
 
@@ -363,27 +363,27 @@ function reset() {
     check_root
     case "${target}" in
         domain)
-            1panel -l $LANGUAGE reset domain
+            1panel -l "$LANGUAGE" reset domain
             ;;
         entrance)
-            1panel -l $LANGUAGE reset entrance
+            1panel -l "$LANGUAGE" reset entrance
             ;;
         https)
-            1panel -l $LANGUAGE reset https
+            1panel -l "$LANGUAGE" reset https
             target=all
             restart
             ;;
         ips)
-            1panel -l $LANGUAGE reset ips
+            1panel -l "$LANGUAGE" reset ips
             ;;
         mfa)
-            1panel -l $LANGUAGE reset mfa ${extra_args[@]}
+            1panel -l "$LANGUAGE" reset mfa "${extra_args[@]}"
             ;;
         passkey)
-            1panel -l $LANGUAGE reset passkey
+            1panel -l "$LANGUAGE" reset passkey
             ;;
         *)
-            1panel -l $LANGUAGE reset
+            1panel -l "$LANGUAGE" reset
             ;;
     esac
     generate_border_line 60 "-" "$YELLOW"
@@ -394,16 +394,16 @@ function update() {
     check_root
     case "${target}" in
         username)
-            1panel -l $LANGUAGE update username ${extra_args[@]}
+            1panel -l "$LANGUAGE" update username "${extra_args[@]}"
             ;;
         password)
-            1panel -l $LANGUAGE update password ${extra_args[@]}
+            1panel -l "$LANGUAGE" update password "${extra_args[@]}"
             ;;
         port)
-            1panel -l $LANGUAGE update port
+            1panel -l "$LANGUAGE" update port
             ;;
         *)
-            1panel -l $LANGUAGE update
+            1panel -l "$LANGUAGE" update
             ;;
     esac
     generate_border_line 60 "-" "$YELLOW"

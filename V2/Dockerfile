@@ -1,5 +1,7 @@
 FROM ubuntu:26.04
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 ARG DEBIAN_FRONTEND=noninteractive
 ARG INSTALL_MODE="stable"
 ARG PANELVER=""
@@ -12,17 +14,20 @@ LABEL org.opencontainers.image.version="${PANELVER}" \
     org.opencontainers.image.title="1Panel V2" \
     org.opencontainers.image.vendor="okxlin"
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl wget tar unzip zip git sudo gnupg sqlite3 tzdata \
     expect ca-certificates lsb-release && \
     ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg && \
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /tmp/docker.gpg.asc && \
+    gpg --batch --show-keys --with-colons /tmp/docker.gpg.asc | awk -F: '$1 == "fpr" { print $10; exit }' | grep -qx "9DC858229FC7DD38854AE2D88D81803C0EBFCD88" && \
+    gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg /tmp/docker.gpg.asc && \
+    rm -f /tmp/docker.gpg.asc && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list && \
-    apt-get update && apt-get install -y docker-ce-cli && \
-    curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && \
+    apt-get update && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin && \
+    printf '%s\n' '#!/bin/sh' 'exec docker compose "$@"' > /usr/local/bin/docker-compose && \
     chmod +x /usr/local/bin/docker-compose && \
-    ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose && \
-    apt-get install -y supervisor && \
+    ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose && \
+    apt-get install -y --no-install-recommends supervisor && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

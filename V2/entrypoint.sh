@@ -14,11 +14,50 @@ FLAG=".docker_initialized"
 PORT=${PORT:-10086}
 ENT=$(echo "${ENTRANCE:-entrance}" | sed 's|^/||' | sed 's|/$||')
 USER=${USERNAME:-"1panel"}
-PASS=${PASSWORD:-$PASSWORD}
+PASS=${PASSWORD:-}
 RESET=${RESET:-"false"}
 
 log() {
     echo "[Entrypoint] $(date '+%H:%M:%S') - $1"
+}
+
+die() {
+    log "错误: $1"
+    exit 1
+}
+
+has_control_chars() {
+    printf '%s' "$1" | LC_ALL=C grep -q '[[:cntrl:]]'
+}
+
+validate_env() {
+    if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
+        die "PORT 必须是 1-65535 之间的数字"
+    fi
+
+    if [ -z "$ENT" ] || ! [[ "$ENT" =~ ^[A-Za-z0-9._-]+$ ]]; then
+        die "ENTRANCE 只能包含字母、数字、点、下划线和连字符"
+    fi
+
+    if [ -z "$USER" ] || ! [[ "$USER" =~ ^[A-Za-z0-9._@-]+$ ]]; then
+        die "USERNAME 只能包含字母、数字、点、下划线、@ 和连字符"
+    fi
+
+    if [ -z "$EXT_DIR" ] || [[ "$EXT_DIR" != /* ]] || ! [[ "$EXT_DIR" =~ ^/[A-Za-z0-9._/@+-]*$ ]]; then
+        die "BASE_DIR 必须是绝对路径，且只能包含常见路径字符"
+    fi
+
+    if has_control_chars "$PASS"; then
+        die "PASSWORD 不能包含控制字符"
+    fi
+}
+
+sql_escape() {
+    printf '%s' "$1" | sed "s/'/''/g"
+}
+
+sed_replacement_escape() {
+    printf '%s' "$1" | sed 's/[|&\\]/\\&/g'
 }
 
 remove_duplicates() {
@@ -36,15 +75,21 @@ update_db_key() {
     
     if [ -f "$db" ]; then
         # 获取当前时间，格式对齐 1Panel 数据库风格 (例如 2024-05-20 12:00:00)
-        local now=$(date '+%Y-%m-%d %H:%M:%S')
+        local now
+        local key_sql val_sql now_sql
+        now=$(date '+%Y-%m-%d %H:%M:%S')
+        key_sql=$(sql_escape "$key")
+        val_sql=$(sql_escape "$val")
+        now_sql=$(sql_escape "$now")
         
         # [核心修复] 在同一个连接中执行 UPDATE 和 changes()
-        local changes=$(sqlite3 "$db" "UPDATE settings SET value = '$val', updated_at = '$now' WHERE key = '$key'; SELECT changes();")
+        local changes
+        changes=$(sqlite3 "$db" "UPDATE settings SET value = '$val_sql', updated_at = '$now_sql' WHERE key = '$key_sql'; SELECT changes();")
         
         # 如果 changes 返回 0，说明 Key 不存在，执行插入
         if [ "$changes" -eq 0 ]; then
             log "Key [$key] 不存在，执行插入..."
-            sqlite3 "$db" "INSERT INTO settings (created_at, updated_at, key, value) VALUES ('$now', '$now', '$key', '$val');"
+            sqlite3 "$db" "INSERT INTO settings (created_at, updated_at, key, value) VALUES ('$now_sql', '$now_sql', '$key_sql', '$val_sql');"
         fi
     fi
 }
@@ -69,10 +114,12 @@ init_offline() {
     if [ -f "/usr/local/bin/1pctl" ]; then
         # 1Panel 通过宿主机 docker.sock 创建业务容器，挂载源路径必须写成宿主机真实路径。
         # 这里要用 BASE_DIR(外部路径)，不能写死成容器内的 /opt。
-        sed -i "s|BASE_DIR=.*|BASE_DIR=${EXT_DIR}|g" /usr/local/bin/1pctl
+        EXT_DIR_ESC=$(sed_replacement_escape "$EXT_DIR")
+        USER_ESC=$(sed_replacement_escape "$USER")
+        sed -i "s|BASE_DIR=.*|BASE_DIR=${EXT_DIR_ESC}|g" /usr/local/bin/1pctl
         sed -i "s|ORIGINAL_PORT=.*|ORIGINAL_PORT=${PORT}|g" /usr/local/bin/1pctl
         sed -i "s|ORIGINAL_ENTRANCE=.*|ORIGINAL_ENTRANCE=/${ENT}|g" /usr/local/bin/1pctl
-        sed -i "s|ORIGINAL_USERNAME=.*|ORIGINAL_USERNAME=${USER}|g" /usr/local/bin/1pctl
+        sed -i "s|ORIGINAL_USERNAME=.*|ORIGINAL_USERNAME=${USER_ESC}|g" /usr/local/bin/1pctl
     fi
 
     if [ ! -f "${DATA}/db/core.db" ]; then
@@ -86,7 +133,7 @@ init_offline() {
             if [ -f "${TPL}/tmp/.secret" ]; then
                 cp "${TPL}/tmp/.secret" "${DATA}/tmp/.secret"
             else
-                echo "$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 16)" > "${DATA}/tmp/.secret"
+                head /dev/urandom | tr -dc A-Za-z0-9 | head -c 16 > "${DATA}/tmp/.secret"
             fi
         fi
     fi
@@ -135,7 +182,7 @@ config_online() {
     MAX=60
     cnt=0
     while [ $cnt -lt $MAX ]; do
-        if curl -s -o /dev/null http://127.0.0.1:${CURRENT_PORT}; then
+        if curl -s -o /dev/null "http://127.0.0.1:${CURRENT_PORT}"; then
             log "服务已就绪，开始配置..."
             sleep 3
             break
@@ -146,7 +193,11 @@ config_online() {
 
     if [ ! -f "${DATA}/${FLAG}" ] || [ "${RESET}" == "true" ]; then
         
-        [ "${RESET}" == "true" ] && log "执行强制重置..." || log "首次初始化..."
+        if [ "${RESET}" == "true" ]; then
+            log "执行强制重置..."
+        else
+            log "首次初始化..."
+        fi
         
         GEN_RAND=false
         if [ -z "$PASS" ] || [ "$PASS" == "1panel_password" ]; then
@@ -154,24 +205,27 @@ config_online() {
             GEN_RAND=true
         fi
 
-        /usr/bin/expect <<EOF >/dev/stdout 2>&1
+        export PANEL_INIT_USER="$USER"
+        export PANEL_INIT_PASS="$PASS"
+
+        /usr/bin/expect <<'EOF' >/dev/stdout 2>&1
 set timeout 30
 spawn /usr/local/bin/1pctl update username
 expect {
-    "Update user information:" { send "$USER\r" }
-    "user:" { send "$USER\r" }
+    "Update user information:" { send -- "$env(PANEL_INIT_USER)\r" }
+    "user:" { send -- "$env(PANEL_INIT_USER)\r" }
     timeout { exit 1 }
 }
 expect eof
 spawn /usr/local/bin/1pctl update password
 expect {
-    "Update user password:" { send "$PASS\r" }
-    "password:" { send "$PASS\r" }
+    "Update user password:" { send -- "$env(PANEL_INIT_PASS)\r" }
+    "password:" { send -- "$env(PANEL_INIT_PASS)\r" }
     timeout { exit 1 }
 }
 expect {
-    "Update user password:" { send "$PASS\r" }
-    "password:" { send "$PASS\r" }
+    "Update user password:" { send -- "$env(PANEL_INIT_PASS)\r" }
+    "password:" { send -- "$env(PANEL_INIT_PASS)\r" }
     timeout { exit 1 }
 }
 expect eof
@@ -189,7 +243,7 @@ EOF
             
             sleep 5
             log "验证新端口: $PORT"
-            if curl -s -o /dev/null http://127.0.0.1:${PORT}; then
+            if curl -s -o /dev/null "http://127.0.0.1:${PORT}"; then
                 log "✅ 所有配置已生效。"
                 touch "${DATA}/${FLAG}"
                 if [ "$GEN_RAND" == "true" ]; then
@@ -203,11 +257,12 @@ EOF
         else
             log "❌ 配置修改失败。"
         fi
-        unset PASS
+        unset PASS PANEL_INIT_USER PANEL_INIT_PASS
     fi
 }
 
 main() {
+    validate_env
     setup_symlink
     init_offline
     config_online &
