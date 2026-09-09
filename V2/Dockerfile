@@ -14,7 +14,25 @@ LABEL org.opencontainers.image.version="${PANELVER}" \
     org.opencontainers.image.title="1Panel V2" \
     org.opencontainers.image.vendor="okxlin"
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt_install_with_retry() { \
+    local attempt=1; \
+    local max_attempts=5; \
+    while [ "$attempt" -le "$max_attempts" ]; do \
+        if apt-get -o Acquire::Retries=3 update && \
+            apt-get -o Acquire::Retries=3 install -y --no-install-recommends "$@"; then \
+            return 0; \
+        fi; \
+        if [ "$attempt" -eq "$max_attempts" ]; then \
+            echo "apt package installation failed after ${max_attempts} attempts." >&2; \
+            return 1; \
+        fi; \
+        echo "apt package installation failed; refreshing package lists and retrying (${attempt}/${max_attempts})..." >&2; \
+        rm -rf /var/lib/apt/lists/*; \
+        sleep $((attempt * 5)); \
+        attempt=$((attempt + 1)); \
+    done; \
+} && \
+    apt_install_with_retry \
     curl wget tar unzip zip git sudo gnupg sqlite3 tzdata \
     expect ca-certificates lsb-release && \
     ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
@@ -23,11 +41,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg /tmp/docker.gpg.asc && \
     rm -f /tmp/docker.gpg.asc && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list && \
-    apt-get update && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin && \
+    apt_install_with_retry docker-ce-cli docker-compose-plugin supervisor && \
     printf '%s\n' '#!/bin/sh' 'exec docker compose "$@"' > /usr/local/bin/docker-compose && \
     chmod +x /usr/local/bin/docker-compose && \
     ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose && \
-    apt-get install -y --no-install-recommends supervisor && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -49,7 +66,11 @@ RUN chmod +x /usr/local/bin/entrypoint.sh && \
     PKG_URL="https://resource.fit2cloud.com/1panel/package/v2/${INSTALL_MODE}/${PANELVER}/release/${PKG_NAME}" && \
     echo "Downloading ${PKG_URL}..." && \
     curl -sSL -o package.tar.gz "$PKG_URL" && \
-    tar zxvf package.tar.gz --strip-components 1 && \
+    if [ "$ARCH" = "armv7" ]; then \
+    tar -xzf package.tar.gz --strip-components 1 --to-command='target="/app/$TAR_FILENAME"; mkdir -p "$(dirname "$target")"; cat > "$target"; chmod "$TAR_MODE" "$target"' ; \
+    else \
+    tar zxvf package.tar.gz --strip-components 1; \
+    fi && \
     rm package.tar.gz && \
     mv /app/1pctl.custom /app/1pctl && \
     sed -i "s|ORIGINAL_VERSION=.*|ORIGINAL_VERSION=${PANELVER}|g" /app/1pctl && \
