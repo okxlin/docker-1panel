@@ -56,7 +56,11 @@ COPY ./supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 RUN chmod +x /usr/local/bin/entrypoint.sh && \
     chmod +x /app/install-v1.override.sh && \
     if [ -z "$PANELVER" ]; then \
-        PANELVER=$(curl -s https://resource.fit2cloud.com/1panel/package/stable/latest); \
+        VERSION_FILE="$(mktemp)" && \
+        curl -fsSL --retry 5 --retry-all-errors --retry-max-time 120 --remove-on-error \
+            --output "$VERSION_FILE" https://resource.fit2cloud.com/1panel/package/stable/latest && \
+        PANELVER=$(cat "$VERSION_FILE") && \
+        rm -f "$VERSION_FILE"; \
     fi && \
     ARCH=$(dpkg --print-architecture) && \
     if [ "$ARCH" = "armhf" ]; then ARCH="armv7"; fi && \
@@ -64,7 +68,8 @@ RUN chmod +x /usr/local/bin/entrypoint.sh && \
     PKG_NAME="1panel-${PANELVER}-linux-${ARCH}.tar.gz" && \
     PKG_URL="https://resource.fit2cloud.com/1panel/package/${INSTALL_MODE}/${PANELVER}/release/${PKG_NAME}" && \
     echo "Downloading ${PKG_URL}..." && \
-    curl -sSL -o package.tar.gz "$PKG_URL" && \
+    curl -fsSL --retry 5 --retry-all-errors --retry-max-time 120 --remove-on-error \
+        -o package.tar.gz "$PKG_URL" && \
     if [ "$ARCH" = "armv7" ]; then \
     tar -xzf package.tar.gz --strip-components 1 --to-command='target="/app/$TAR_FILENAME"; mkdir -p "$(dirname "$target")"; cat > "$target"; chmod "$TAR_MODE" "$target"' ; \
     else \

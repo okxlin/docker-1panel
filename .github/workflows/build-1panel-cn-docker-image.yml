@@ -99,7 +99,11 @@ jobs:
             echo "PANELVER=${VER_INPUT}" >> "$GITHUB_OUTPUT"
             echo "👉 Using manual version: ${VER_INPUT}"
           else
-            VER_LATEST=$(curl -fsSL "${{ matrix.version_url }}")
+            VERSION_FILE="$(mktemp)"
+            curl -fsSL --retry 5 --retry-all-errors --retry-max-time 120 --remove-on-error \
+              --output "$VERSION_FILE" "${{ matrix.version_url }}"
+            VER_LATEST="$(cat "$VERSION_FILE")"
+            rm -f "$VERSION_FILE"
             validate_version "$VER_LATEST"
             echo "PANELVER=${VER_LATEST}" >> "$GITHUB_OUTPUT"
             echo "🔎 Detected latest version: ${VER_LATEST}"
