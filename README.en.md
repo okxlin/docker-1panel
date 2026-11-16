@@ -18,8 +18,8 @@ This project provides container images for 1Panel. It supports V1/V2, CN builds,
 | --- | --- | --- | --- | --- |
 | V1 CN | `resource.fit2cloud.com` | `V1/Dockerfile` | `v1.10.34-lts` | Maintain existing V1 deployments |
 | V1 Global | `resource.1panel.pro` | `V1/Dockerfile-Global` | `v1.10.34-lts` | Maintain existing Global V1 deployments |
-| V2 CN | `resource.fit2cloud.com/1panel/package/v2` | `V2/Dockerfile` | `v2.2.2` | Recommended for new CN deployments |
-| V2 Global | `resource.1panel.pro/v2` | `V2/Dockerfile-Global` | `v2.2.2` | Recommended for new Global deployments |
+| V2 CN | `resource.fit2cloud.com/1panel/package/v2` | `V2/Dockerfile` | `v2.5.1` | Recommended for new CN deployments |
+| V2 Global | `resource.1panel.pro/v2` | `V2/Dockerfile-Global` | `v2.5.1` | Recommended for new Global deployments |
 
 Base image: `ubuntu:26.04`
 
@@ -35,12 +35,12 @@ moelin/1panel:global-v1.10.34-lts
 moelin/1panel:global-v1
 
 # V2 CN
-moelin/1panel:v2.2.2
+moelin/1panel:v2.5.1
 moelin/1panel:v2
 moelin/1panel:latest
 
 # V2 Global
-moelin/1panel:global-v2.2.2
+moelin/1panel:global-v2.5.1
 moelin/1panel:global-v2
 ```
 
@@ -174,6 +174,14 @@ Database paths:
 /opt/1panel/db/agent.db
 ```
 
+## Snapshots
+
+At startup, the image configures panel service calls to use Supervisor for V1 snapshot creation and V2 snapshot recovery. V2 service files have distinct names so they cannot overwrite panel binaries in the snapshot archive.
+
+Create a fresh snapshot after updating the image. Restore with the same panel major version, CPU architecture, and `BASE_DIR`.
+
+Scheduled builds pull the Ubuntu 26.04 base image, upgrade installed packages, and disable build caching to obtain the security updates available for each architecture.
+
 ## Build
 
 Local single-architecture builds:
@@ -190,14 +198,14 @@ Build a specific version:
 
 ```bash
 docker build \
-  --build-arg PANELVER=v2.2.2 \
-  -t 1panel:v2.2.2 \
+  --build-arg PANELVER=v2.5.1 \
+  -t 1panel:v2.5.1 \
   ./V2
 
 docker build \
   -f ./V2/Dockerfile-Global \
-  --build-arg PANELVER=v2.2.2 \
-  -t 1panel:global-v2.2.2 \
+  --build-arg PANELVER=v2.5.1 \
+  -t 1panel:global-v2.5.1 \
   ./V2
 ```
 
@@ -206,8 +214,8 @@ Multi-architecture build and push:
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le,linux/s390x \
-  --build-arg PANELVER=v2.2.2 \
-  -t <your-dockerhub-username>/1panel:v2.2.2 \
+  --build-arg PANELVER=v2.5.1 \
+  -t <your-dockerhub-username>/1panel:v2.5.1 \
   -t <your-dockerhub-username>/1panel:v2 \
   --push \
   ./V2
@@ -215,8 +223,8 @@ docker buildx build \
 docker buildx build \
   --platform linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le,linux/s390x \
   -f ./V2/Dockerfile-Global \
-  --build-arg PANELVER=v2.2.2 \
-  -t <your-dockerhub-username>/1panel:global-v2.2.2 \
+  --build-arg PANELVER=v2.5.1 \
+  -t <your-dockerhub-username>/1panel:global-v2.5.1 \
   -t <your-dockerhub-username>/1panel:global-v2 \
   --push \
   ./V2

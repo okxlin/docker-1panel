@@ -19,6 +19,7 @@ RUN apt_install_with_retry() { \
     local max_attempts=5; \
     while [ "$attempt" -le "$max_attempts" ]; do \
         if apt-get -o Acquire::Retries=3 update && \
+            apt-get -o Acquire::Retries=3 upgrade -y && \
             apt-get -o Acquire::Retries=3 install -y --no-install-recommends "$@"; then \
             return 0; \
         fi; \
@@ -52,6 +53,7 @@ WORKDIR /app
 COPY ./1pctl /app/1pctl.custom
 COPY ./install-v2.override.sh /app/install-v2.override.sh
 COPY ./entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chmod=755 ./service /usr/local/bin/service
 COPY ./supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 RUN chmod +x /usr/local/bin/entrypoint.sh && \

@@ -18,6 +18,7 @@ RUN apt_install_with_retry() { \
     local max_attempts=5; \
     while [ "$attempt" -le "$max_attempts" ]; do \
         if apt-get -o Acquire::Retries=3 update && \
+            apt-get -o Acquire::Retries=3 upgrade -y && \
             apt-get -o Acquire::Retries=3 install -y --no-install-recommends "$@"; then \
             return 0; \
         fi; \

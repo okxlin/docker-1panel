@@ -244,10 +244,21 @@ EOF
     fi
 }
 
+setup_snapshot_service() {
+    mkdir -p /etc/init.d "${DATA}/resource/initscript"
+    cat > /etc/init.d/1panel <<'EOF'
+#!/bin/sh
+exec /usr/bin/supervisorctl -c /etc/supervisor/conf.d/supervisord.conf "$@" 1panel
+EOF
+    chmod 755 /etc/init.d/1panel
+    cp /etc/init.d/1panel "${DATA}/resource/initscript/1panel"
+}
+
 main() {
     validate_env
     setup_symlink
     init_offline
+    setup_snapshot_service
     config_online &
     
     unset PASSWORD USERNAME RESET

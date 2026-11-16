@@ -173,6 +173,18 @@ init_offline() {
     fi
 }
 
+setup_services() {
+    local service_name
+    mkdir -p /etc/init.d "${DATA}/resource/initscript"
+    for service_name in 1panel-core 1panel-agent; do
+        # The .service suffix keeps snapshot service files separate from binaries.
+        printf '#!/bin/sh\nexec /usr/local/bin/service %s "$@"\n' "$service_name" \
+            > "/etc/init.d/${service_name}.service"
+        chmod 755 "/etc/init.d/${service_name}.service"
+        cp -p "/etc/init.d/${service_name}.service" "${DATA}/resource/initscript/"
+    done
+}
+
 config_online() {
     CURRENT_PORT=$(sqlite3 "${DATA}/db/core.db" "SELECT value FROM settings WHERE key='ServerPort';")
     CURRENT_PORT=${CURRENT_PORT:-10086}
@@ -265,6 +277,7 @@ main() {
     validate_env
     setup_symlink
     init_offline
+    setup_services
     config_online &
     
     unset PASSWORD USERNAME RESET

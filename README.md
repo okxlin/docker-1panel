@@ -18,8 +18,8 @@
 | --- | --- | --- | --- | --- |
 | V1 CN | `resource.fit2cloud.com` | `V1/Dockerfile` | `v1.10.34-lts` | 继续维护已有 V1 部署 |
 | V1 Global | `resource.1panel.pro` | `V1/Dockerfile-Global` | `v1.10.34-lts` | 继续维护已有国际版 V1 部署 |
-| V2 CN | `resource.fit2cloud.com/1panel/package/v2` | `V2/Dockerfile` | `v2.2.2` | 新部署推荐 |
-| V2 Global | `resource.1panel.pro/v2` | `V2/Dockerfile-Global` | `v2.2.2` | 新部署国际版推荐 |
+| V2 CN | `resource.fit2cloud.com/1panel/package/v2` | `V2/Dockerfile` | `v2.5.1` | 新部署推荐 |
+| V2 Global | `resource.1panel.pro/v2` | `V2/Dockerfile-Global` | `v2.5.1` | 新部署国际版推荐 |
 
 基础镜像：`ubuntu:26.04`
 
@@ -35,12 +35,12 @@ moelin/1panel:global-v1.10.34-lts
 moelin/1panel:global-v1
 
 # V2 CN
-moelin/1panel:v2.2.2
+moelin/1panel:v2.5.1
 moelin/1panel:v2
 moelin/1panel:latest
 
 # V2 Global
-moelin/1panel:global-v2.2.2
+moelin/1panel:global-v2.5.1
 moelin/1panel:global-v2
 ```
 
@@ -174,6 +174,14 @@ touch /data/1panel/.docker_initialized
 /opt/1panel/db/agent.db
 ```
 
+## 快照
+
+镜像启动时会配置面板的 Supervisor 服务兼容层，供 V1 快照创建和 V2 快照恢复使用。V2 的服务文件与面板二进制采用不同文件名，避免服务脚本覆盖快照中的二进制。
+
+建议升级镜像后重新生成快照。恢复时保持相同的面板主版本、CPU 架构和 `BASE_DIR`。
+
+定时构建会重新拉取 Ubuntu 26.04 基础镜像、更新已安装软件包并禁用构建缓存，以获取当前架构可用的安全更新。
+
 ## 编译
 
 单架构本地构建：
@@ -190,14 +198,14 @@ docker build -f ./V2/Dockerfile-Global -t 1panel:global-v2 ./V2
 
 ```bash
 docker build \
-  --build-arg PANELVER=v2.2.2 \
-  -t 1panel:v2.2.2 \
+  --build-arg PANELVER=v2.5.1 \
+  -t 1panel:v2.5.1 \
   ./V2
 
 docker build \
   -f ./V2/Dockerfile-Global \
-  --build-arg PANELVER=v2.2.2 \
-  -t 1panel:global-v2.2.2 \
+  --build-arg PANELVER=v2.5.1 \
+  -t 1panel:global-v2.5.1 \
   ./V2
 ```
 
@@ -206,8 +214,8 @@ docker build \
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le,linux/s390x \
-  --build-arg PANELVER=v2.2.2 \
-  -t <your-dockerhub-username>/1panel:v2.2.2 \
+  --build-arg PANELVER=v2.5.1 \
+  -t <your-dockerhub-username>/1panel:v2.5.1 \
   -t <your-dockerhub-username>/1panel:v2 \
   --push \
   ./V2
@@ -215,8 +223,8 @@ docker buildx build \
 docker buildx build \
   --platform linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le,linux/s390x \
   -f ./V2/Dockerfile-Global \
-  --build-arg PANELVER=v2.2.2 \
-  -t <your-dockerhub-username>/1panel:global-v2.2.2 \
+  --build-arg PANELVER=v2.5.1 \
+  -t <your-dockerhub-username>/1panel:global-v2.5.1 \
   -t <your-dockerhub-username>/1panel:global-v2 \
   --push \
   ./V2
