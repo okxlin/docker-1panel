@@ -1,0 +1,24 @@
+#!/bin/sh
+
+# Keep the panel's SysV service calls under the container's Supervisor.
+case "${1:-}" in
+    1panel-core|1panel-core.service) program=1panel-core ;;
+    1panel-agent|1panel-agent.service) program=1panel-agent ;;
+    *) exec /usr/sbin/service "$@" ;;
+esac
+shift
+
+if [ "$#" -ne 1 ]; then
+    echo "Usage: service $program {start|stop|restart|status}" >&2
+    exit 2
+fi
+
+case "$1" in
+    start|stop|restart|status)
+        exec /usr/bin/supervisorctl -c /etc/supervisor/conf.d/supervisord.conf "$1" "$program"
+        ;;
+    *)
+        echo "Unsupported operation for $program: $1" >&2
+        exit 2
+        ;;
+esac

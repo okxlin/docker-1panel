@@ -1,0 +1,65 @@
+name: Snapshot smoke
+
+on:
+  pull_request:
+    paths:
+      - "V1/**"
+      - "V2/**"
+      - "tests/**"
+      - ".github/workflows/build-1panel-cn-docker-image.yml"
+      - ".github/workflows/build-1panel-global-docker-image.yml"
+      - ".github/workflows/snapshot-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    name: ${{ matrix.generation }} ${{ matrix.edition }} snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        generation: [v1, v2]
+        edition: [cn, global]
+    env:
+      GENERATION: ${{ matrix.generation }}
+      EDITION: ${{ matrix.edition }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tests/snapshot_smoke.py tests/snapshot_fixture.py
+          context="${GENERATION^^}"
+          bash -n "$context/entrypoint.sh" "$context/1pctl" "$context/install-${GENERATION}.override.sh"
+          if [[ "$GENERATION" == "v2" ]]; then
+            sh -n V2/service
+          fi
+      - name: Build native amd64 image
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = "x86_64"
+          context="${GENERATION^^}"
+          dockerfile="${context}/Dockerfile"
+          if [[ "$EDITION" == "global" ]]; then
+            dockerfile="${dockerfile}-Global"
+          fi
+          docker build --pull --platform linux/amd64 \
+            --tag "snapshot-smoke:${GENERATION}-${EDITION}" \
+            --file "$dockerfile" "$context"
+      - name: Exercise real snapshot API and archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/snapshot_smoke.py \
+            --image "snapshot-smoke:${GENERATION}-${EDITION}" \
+            --generation "$GENERATION" \
+            --artifacts-dir "$RUNNER_TEMP/snapshot-smoke"
