@@ -30,14 +30,19 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image", required=True)
     parser.add_argument("--generation", choices=("v1", "v2"), required=True)
+    parser.add_argument("--panel-config", choices=("/etc/supervisor/conf.d/supervisord.conf",
+                                                  "/etc/1panel/supervisord.conf"),
+                        help="Explicit panel configuration for older image regression checks")
     parser.add_argument("--artifacts-dir", type=Path)
     args = parser.parse_args()
+    panel_options = ["--panel-config", args.panel_config] if args.panel_config else []
     if args.image.startswith("-") or any(char.isspace() for char in args.image):
         parser.error("--image must be a Docker image reference")
     fixture = Path(__file__).resolve().with_name("snapshot_fixture.py")
     run_id = uuid.uuid4().hex
     name = "1panel-snapshot-smoke-" + args.generation + "-" + run_id[:12]
     report = {"image": args.image, "generation": args.generation, "container": name,
+              "panel_config_override": args.panel_config,
               "smoke_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               "fixture_sha256": hashlib.sha256(fixture.read_bytes()).hexdigest(),
               "isolation": {"network": "none", "host_binds": [], "privileged": False,
@@ -51,7 +56,7 @@ def main():
                          "--security-opt", "no-new-privileges=true",
                          "--env", "DOCKER_HOST=unix:///tmp/snapshot-smoke-docker.sock",
                          "--entrypoint", "/usr/bin/python3", args.image,
-                         FIXTURE_PATH, "init", "--generation", args.generation)
+                         FIXTURE_PATH, "init", "--generation", args.generation, *panel_options)
         container_id = created.stdout.strip()
         if not re.fullmatch(r"[0-9a-f]{64}", container_id):
             raise SmokeError("Docker did not return a container ID")
@@ -64,7 +69,7 @@ def main():
         docker("cp", str(fixture), container_id + ":" + FIXTURE_PATH)
         docker("start", container_id)
         checked = docker("exec", container_id, "/usr/bin/python3", FIXTURE_PATH,
-                         "probe", "--generation", args.generation, timeout=420, check=False)
+                         "probe", "--generation", args.generation, *panel_options, timeout=420, check=False)
         try:
             report["result"] = json.loads(checked.stdout)
         except ValueError:

@@ -109,7 +109,7 @@ _service_cmd() {
     # [新增] Supervisor 处理逻辑
     supervisor)
         # 屏蔽 stdout 以保持输出格式整洁，或者保留以查看详情
-        if supervisorctl "$cmd" "$service_target" >/dev/null 2>&1; then
+        if supervisorctl -c /etc/1panel/supervisord.conf "$cmd" "$service_target" >/dev/null 2>&1; then
             echo "$success_msg"
         else 
             echo "$error_msg"

@@ -1,0 +1,465 @@
+#!/usr/bin/env python3
+"""Check V2 persistent bind/volume backup sources and archive coverage."""
+
+import argparse
+import gzip
+import json
+import os
+from pathlib import Path, PurePosixPath
+import re
+import socket
+import sqlite3
+import stat
+import subprocess
+import sys
+import tarfile
+import zlib
+from urllib.parse import urlsplit
+
+
+class CheckError(Exception):
+    pass
+
+
+MAX_METADATA = 1024 * 1024
+
+
+def docker_name(value):
+    if not isinstance(value, str):
+        raise CheckError("invalid Docker object name")
+    value = value.removeprefix("/")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", value):
+        raise CheckError("invalid Docker object name")
+    return value
+
+
+def absolute_path(value):
+    if not isinstance(value, str) or "\0" in value:
+        raise CheckError("invalid source path")
+    path = PurePosixPath(value)
+    if not path.is_absolute() or ".." in path.parts:
+        raise CheckError("source path must be an absolute path without parent traversal")
+    return Path(str(path))
+
+
+def panel_docker_host():
+    # Match agent/utils/docker.NewDockerClientWithContext, not an unrelated CLI context.
+    database = Path("/opt/1panel/db/agent.db")
+    try:
+        with sqlite3.connect(database.as_uri() + "?mode=ro", uri=True) as connection:
+            row = connection.execute(
+                "SELECT value FROM settings WHERE key='DockerSockPath' ORDER BY rowid LIMIT 1"
+            ).fetchone()
+    except sqlite3.Error:
+        raise CheckError("run preflight inside the V2 panel; its agent database is unavailable") from None
+    host = row[0] if row and row[0] else "unix:///var/run/docker.sock"
+    parsed = urlsplit(host)
+    if parsed.scheme != "unix" or parsed.netloc or not parsed.path.startswith("/"):
+        raise CheckError("preflight supports the panel's same-host Unix Docker socket only")
+    return host
+
+
+def docker_output(host, *arguments):
+    try:
+        result = subprocess.run(["docker", "--host", host, *arguments],
+                                capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        raise CheckError("Docker metadata request failed") from None
+    if result.returncode:
+        raise CheckError("Docker metadata request failed; check the selected object and socket")
+    if len(result.stdout) > 4 * 1024 * 1024:
+        raise CheckError("Docker metadata response is unexpectedly large")
+    return result.stdout
+
+
+def inspect_mounts(host, name, panel=False):
+    template = ('{"Mounts":{{json .Mounts}},"Hostname":{{json .Config.Hostname}}}'
+                if panel else "{{json .Mounts}}")
+    try:
+        return json.loads(docker_output(host, "inspect", "--type", "container", "--format",
+                                        template, docker_name(name)))
+    except ValueError:
+        raise CheckError("Docker returned invalid mount metadata") from None
+
+
+def same_path_mapping(source, panel_mounts):
+    """Prove the locally read path comes from the inspected host source."""
+    resolved = source.resolve(strict=True)
+    candidates = []
+    for mount in panel_mounts:
+        if not isinstance(mount, dict):
+            raise CheckError("invalid panel mount metadata")
+        if mount.get("Type") not in ("bind", "volume"):
+            continue
+        target = absolute_path(mount.get("Destination")).resolve(strict=True)
+        if resolved == target or target in resolved.parents:
+            translated = absolute_path(mount.get("Source")) / resolved.relative_to(target)
+            candidates.append((len(target.parts), translated == source))
+    if not candidates:
+        return False
+    deepest = max(depth for depth, same in candidates)
+    return any(same for depth, same in candidates if depth == deepest)
+
+
+def check_mount_source(host, mount, panel_mounts):
+    if not isinstance(mount, dict):
+        raise CheckError("invalid container mount metadata")
+    kind = mount.get("Type")
+    if kind == "tmpfs":
+        return {"type": kind, "destination": mount.get("Destination"), "status": "excluded-ephemeral"}
+    if kind not in ("bind", "volume"):
+        raise CheckError("unsupported persistent mount type")
+    source = absolute_path(mount.get("Source"))
+    try:
+        info = source.stat()
+        if not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)):
+            raise CheckError("source is not a regular file or directory: " + str(source))
+        if not same_path_mapping(source, panel_mounts):
+            raise CheckError("source is not covered by a same-path panel mount: " + str(source))
+    except OSError:
+        raise CheckError("backup source is unavailable: " + str(source)) from None
+    if not os.access(source, os.R_OK | (os.X_OK if stat.S_ISDIR(info.st_mode) else 0)):
+        raise CheckError("backup source is not readable: " + str(source))
+    if kind == "volume":
+        try:
+            template = '{"Driver":{{json .Driver}},"Mountpoint":{{json .Mountpoint}}}'
+            volume = json.loads(docker_output(host, "volume", "inspect", "--format", template,
+                                             docker_name(mount.get("Name", ""))))
+        except ValueError:
+            raise CheckError("Docker returned invalid volume metadata") from None
+        if not isinstance(volume, dict) or volume.get("Driver") != "local":
+            raise CheckError("preflight supports same-host local-driver volumes only")
+        if absolute_path(volume.get("Mountpoint")) != source:
+            raise CheckError("volume mountpoint differs from the container source")
+    return {"type": kind, "source": str(source), "destination": mount.get("Destination"),
+            "status": "readable-same-path", "read_only": not bool(mount.get("RW"))}
+
+
+def preflight(args):
+    host = panel_docker_host()
+    panel = inspect_mounts(host, args.panel_container, panel=True)
+    if not isinstance(panel, dict) or panel.get("Hostname") != socket.gethostname():
+        raise CheckError("run preflight in the selected panel container")
+    panel_mounts = panel.get("Mounts") or []
+    if not isinstance(panel_mounts, list) or len(panel_mounts) > 4096:
+        raise CheckError("invalid or excessive panel mount metadata")
+    if args.compose_project:
+        project = docker_name(args.compose_project)
+        names = docker_output(host, "ps", "--all", "--no-trunc", "--filter",
+                              "label=com.docker.compose.project=" + project, "--format", "{{.ID}}").splitlines()
+        if not names:
+            raise CheckError("the selected Compose project has no containers")
+    else:
+        names = args.container
+    if len(names) > 1000:
+        raise CheckError("too many containers selected")
+    reports = []
+    for name in names:
+        mounts = inspect_mounts(host, name) or []
+        if not isinstance(mounts, list) or len(mounts) > 4096:
+            raise CheckError("invalid or excessive container mount metadata")
+        reports.append({"container": docker_name(name),
+                        "mounts": [check_mount_source(host, mount, panel_mounts) for mount in mounts]})
+    return {"coverage": "persistent bind/volume source paths; not application consistency",
+            "containers": reports}
+
+
+class ArchiveBudget:
+    def __init__(self, max_members=100000, max_bytes=64 * 1024 ** 3):
+        self.members = 0
+        self.bytes = 0
+        self.max_members = max_members
+        self.max_bytes = max_bytes
+
+    def header(self):
+        self.members += 1
+        if self.members > self.max_members:
+            raise CheckError("archive exceeds the member-header budget")
+
+
+class TarHeaders:
+    """Bound raw headers before tarfile expands PAX/GNU metadata in memory."""
+
+    EXTENSIONS = (tarfile.XHDTYPE, tarfile.XGLTYPE, tarfile.GNUTYPE_LONGNAME,
+                  tarfile.GNUTYPE_LONGLINK, getattr(tarfile, "SOLARIS_XHDTYPE", b"X"))
+
+    def __init__(self, budget):
+        self.budget = budget
+        self.header = bytearray()
+        self.remaining = self.padding = self.extensions = 0
+        self.metadata = None
+        self.kind = None
+        self.global_size = self.next_size = None
+        self.ended = False
+
+    def pax(self):
+        offset = 0
+        while offset < len(self.metadata):
+            separator = self.metadata.find(b" ", offset)
+            if separator < 0:
+                raise CheckError("invalid tar extension metadata")
+            prefix = self.metadata[offset:separator]
+            if not prefix.isdigit():
+                raise CheckError("invalid tar extension metadata")
+            length = int(prefix)
+            end = offset + length
+            if length < 5 or end > len(self.metadata) or self.metadata[end - 1] != 10:
+                raise CheckError("invalid tar extension metadata")
+            key, equals, value = self.metadata[separator + 1:end - 1].partition(b"=")
+            if not key or not equals or key.startswith(b"GNU.sparse"):
+                raise CheckError("invalid or unsupported sparse tar metadata")
+            if key == b"size":
+                if not value.isdigit():
+                    raise CheckError("invalid tar payload size")
+                size = int(value)
+                if self.kind == tarfile.XGLTYPE:
+                    self.global_size = size
+                else:
+                    self.next_size = size
+            offset = end
+
+    def feed(self, data):
+        data = memoryview(data)
+        while data:
+            if self.ended:
+                if any(data):
+                    raise CheckError("nonzero data follows the tar terminator")
+                return
+            if self.remaining:
+                amount = min(len(data), self.remaining)
+                if self.metadata is not None:
+                    self.metadata.extend(data[:amount])
+                self.remaining -= amount
+                data = data[amount:]
+                if not self.remaining and self.metadata is not None:
+                    self.pax()
+                    self.metadata = None
+                continue
+            if self.padding:
+                amount = min(len(data), self.padding)
+                self.padding -= amount
+                data = data[amount:]
+                continue
+            amount = min(len(data), 512 - len(self.header))
+            self.header.extend(data[:amount])
+            data = data[amount:]
+            if len(self.header) < 512:
+                continue
+            raw, self.header = bytes(self.header), bytearray()
+            if not any(raw):
+                self.ended = True
+                continue
+            member = tarfile.TarInfo.frombuf(raw, "utf-8", "surrogateescape")
+            self.budget.header()
+            self.kind = member.type
+            if member.size < 0:
+                raise CheckError("invalid tar payload size")
+            size = member.size
+            if self.kind in self.EXTENSIONS:
+                self.extensions += 1
+                if size > MAX_METADATA or self.extensions > 16:
+                    raise CheckError("invalid or excessive tar extension metadata")
+                if self.kind in (tarfile.XHDTYPE, tarfile.XGLTYPE, getattr(tarfile, "SOLARIS_XHDTYPE", b"X")):
+                    self.metadata = bytearray()
+            elif self.kind in (tarfile.REGTYPE, tarfile.AREGTYPE, tarfile.DIRTYPE):
+                self.extensions = 0
+                if self.next_size is not None or self.global_size is not None:
+                    size = self.next_size if self.next_size is not None else self.global_size
+                self.next_size = None
+                if self.kind == tarfile.DIRTYPE and size:
+                    raise CheckError("directory tar headers must have zero size")
+            else:
+                raise CheckError("strict archive checking does not support links or special files")
+            if size > self.budget.max_bytes:
+                raise CheckError("archive exceeds the decompressed-byte budget")
+            self.remaining, self.padding = size, (-size) % 512
+            if not size and self.metadata is not None:
+                self.metadata = None
+
+    def finish(self):
+        if not self.ended:
+            raise CheckError("tar archive is truncated or has no terminator")
+
+
+class ArchiveReader:
+    def __init__(self, stream, budget):
+        self.stream, self.budget = stream, budget
+        self.headers = TarHeaders(budget)
+
+    def read(self, size=-1):
+        if size < 0:
+            size = self.budget.max_bytes - self.budget.bytes + 1
+        size = min(size, 65536, self.budget.max_bytes - self.budget.bytes + 1)
+        data = self.stream.read(size)
+        self.budget.bytes += len(data)
+        if self.budget.bytes > self.budget.max_bytes:
+            raise CheckError("archive exceeds the decompressed-byte budget")
+        self.headers.feed(data)
+        return data
+
+
+def archive_path(value):
+    if not isinstance(value, str) or not value or "\0" in value:
+        raise CheckError("invalid archive member path")
+    path = PurePosixPath(value)
+    if path.is_absolute() or ".." in path.parts or not path.parts:
+        raise CheckError("unsafe archive member path")
+    return path
+
+
+def unique_json(pairs):
+    value = {}
+    for key, item in pairs:
+        if key in value:
+            raise CheckError("duplicate JSON metadata key")
+        value[key] = item
+    return value
+
+
+def read_metadata(stream, size):
+    if size > MAX_METADATA:
+        raise CheckError("archive metadata exceeds 1 MiB")
+    raw = stream.read(MAX_METADATA + 1)
+    value = json.loads(raw, object_pairs_hook=unique_json)
+    if not isinstance(value, dict):
+        raise CheckError("archive metadata must be an object")
+    return value
+
+
+def verify_stream(stream, budget, depth=0):
+    if depth > 1:
+        raise CheckError("nested container archives exceed the supported Compose depth")
+
+    members, metadata, nested = {}, {}, {}
+    roots = set()
+    with gzip.GzipFile(fileobj=stream, mode="rb") as compressed:
+        reader = ArchiveReader(compressed, budget)
+        with tarfile.open(fileobj=reader, mode="r|") as archive:
+            for member in archive:
+                path = archive_path(member.name)
+                name = str(path)
+                if name in members:
+                    raise CheckError("duplicate normalized archive path")
+                if not (member.isdir() or member.isfile()):
+                    raise CheckError("strict archive checking does not support links or special files")
+                roots.add(path.parts[0])
+                members[name] = "directory" if member.isdir() else "file"
+                if member.isfile() and ((len(path.parts) == 2 and path.name in
+                        ("meta.json", "inspect.json", "compose_meta.json")) or
+                        (len(path.parts) == 4 and path.parts[1] == "mounts" and path.name == "volume.json")):
+                    metadata[name] = read_metadata(archive.extractfile(member), member.size)
+                elif member.isfile() and len(path.parts) == 3 and path.parts[1] == "containers":
+                    if depth or not path.name.endswith(".tar.gz"):
+                        raise CheckError("unsupported nested container archive")
+                    nested[name] = verify_stream(archive.extractfile(member), budget, depth + 1)
+        # tar iteration stops at its terminator; read the gzip trailer to detect CRC/truncation.
+        while reader.read(65536):
+            pass
+        reader.headers.finish()
+    if len(roots) != 1:
+        raise CheckError("archive must contain one backup root")
+    root = PurePosixPath(next(iter(roots)))
+    meta = metadata.get(str(root / "meta.json"))
+    compose = metadata.get(str(root / "compose_meta.json"))
+    if bool(meta is not None) == bool(compose is not None):
+        raise CheckError("archive must contain one supported backup manifest")
+    if compose is not None:
+        files, containers = compose.get("files"), compose.get("containers")
+        if not isinstance(files, list) or not isinstance(containers, list):
+            raise CheckError("invalid Compose backup manifest")
+        declared, declared_files = set(), set()
+        for item in files:
+            if not isinstance(item, dict):
+                raise CheckError("invalid Compose file metadata")
+            path = archive_path(item["backupPath"])
+            if str(path) in declared_files:
+                raise CheckError("duplicate Compose file declaration")
+            declared_files.add(str(path))
+            if len(path.parts) != 2 or path.parts[0] != "compose_files" or members.get(str(root / path)) != "file":
+                raise CheckError("declared Compose file is missing")
+        for value in containers:
+            path = archive_path(value)
+            if len(path.parts) != 2 or path.parts[0] != "containers":
+                raise CheckError("invalid Compose container archive path")
+            declared.add(str(root / path))
+        if len(declared) != len(containers) or declared != set(nested):
+            raise CheckError("Compose container archives differ from its manifest")
+        return {"kind": "compose", "containers": list(nested.values()),
+                "scope": "declared Compose files and persistent container payloads; .env presence is not declared"}
+    inspection = metadata.get(str(root / "inspect.json"))
+    if not inspection or not isinstance(meta.get("containerID"), str) or not meta["containerID"] or \
+            meta["containerID"] != inspection.get("Id") or nested:
+        raise CheckError("container manifest and inspect identity differ")
+    mounts, inspected = meta.get("mounts") or [], inspection.get("Mounts") or []
+    if not isinstance(mounts, list) or not isinstance(inspected, list) or len(mounts) != len(inspected):
+        raise CheckError("container manifest omits inspected mounts")
+    used, excluded, checked = set(), [], 0
+    for item, expected in zip(mounts, inspected):
+        if not isinstance(item, dict) or not isinstance(expected, dict):
+            raise CheckError("invalid container mount metadata")
+        if any(item.get(key, "") != expected.get(source, "") for key, source in
+               (("type", "Type"), ("source", "Source"), ("destination", "Destination"),
+                ("name", "Name"), ("rw", "RW"))):
+            raise CheckError("container manifest differs from inspected mounts")
+        kind = item.get("type")
+        if kind == "tmpfs":
+            excluded.append(item.get("destination"))
+            continue
+        if kind not in ("bind", "volume") or item.get("status") != "backed_up":
+            raise CheckError("persistent mount data was skipped or is unsupported")
+        path = archive_path(item.get("backupPath"))
+        if len(path.parts) != 3 or path.parts[0] != "mounts" or path.parts[-1] != "data" or str(path) in used:
+            raise CheckError("invalid or duplicated persistent mount backup path")
+        used.add(str(path))
+        if members.get(str(root / path)) != "directory":
+            raise CheckError("persistent mount payload directory is missing")
+        if kind == "volume":
+            volume = metadata.get(str(root / path.parent / "volume.json"))
+            if not volume or volume.get("Name") != item.get("name") or volume.get("Mountpoint") != item.get("source"):
+                raise CheckError("named-volume recovery metadata is missing or mismatched")
+        checked += 1
+    return {"kind": "container", "container": meta.get("containerName"), "persistent_mounts": checked,
+            "excluded_tmpfs": excluded, "scope": "manifest and payload coverage; not original-file checksums"}
+
+
+def positive_integer(value):
+    result = int(value)
+    if result <= 0:
+        raise argparse.ArgumentTypeError("the limit must be positive")
+    return result
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    check = commands.add_parser("preflight", help="Run inside the V2 panel before backup")
+    check.add_argument("--panel-container", required=True)
+    targets = check.add_mutually_exclusive_group(required=True)
+    targets.add_argument("--container", action="append")
+    targets.add_argument("--compose-project")
+    verify = commands.add_parser("verify", help="Read a V2 container/Compose tar.gz without extracting it")
+    verify.add_argument("archive", type=Path)
+    verify.add_argument("--max-members", type=positive_integer, default=100000)
+    verify.add_argument("--max-bytes", type=positive_integer, default=64 * 1024 ** 3,
+                        help="cumulative decoded bytes, including nested containers; default 64 GiB")
+    args = parser.parse_args()
+    try:
+        if args.command == "preflight":
+            result = preflight(args)
+        else:
+            budget = ArchiveBudget(args.max_members, args.max_bytes)
+            with args.archive.open("rb") as stream:
+                result = verify_stream(stream, budget)
+            result.update(member_headers=budget.members, decompressed_bytes=budget.bytes)
+        result.update(status="ok", command=args.command)
+        print(json.dumps(result, ensure_ascii=False))
+        return 0
+    except (CheckError, TypeError, ValueError, KeyError, OSError, EOFError,
+            RecursionError, zlib.error, tarfile.TarError) as error:
+        message = str(error) if isinstance(error, CheckError) else "invalid backup metadata"
+        print(json.dumps({"status": "failed", "command": args.command, "error": message}, ensure_ascii=False))
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

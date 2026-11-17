@@ -23,7 +23,8 @@ import uuid
 
 DATA = Path("/opt/1panel")
 SOCKET = "/tmp/snapshot-smoke-docker.sock"
-SUPERVISOR = ["/usr/bin/supervisorctl", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+PANEL_CONFIGS = {"v1": "/etc/supervisor/conf.d/supervisord.conf",
+                 "v2": "/etc/1panel/supervisord.conf"}
 
 
 class SmokeError(Exception):
@@ -141,7 +142,8 @@ def request(generation, method, path, body=None, timeout=15):
 
 def services(generation):
     names = ["1panel"] if generation == "v1" else ["1panel-core", "1panel-agent"]
-    result = subprocess.run(SUPERVISOR + ["status"], text=True, capture_output=True, timeout=5)
+    result = subprocess.run(["/usr/bin/supervisorctl", "-c", PANEL_CONFIGS[generation], "status"],
+                            text=True, capture_output=True, timeout=5)
     running = dict(re.findall(r"^(1panel(?:-core|-agent)?)\s+RUNNING\s+pid (\d+)", result.stdout, re.M))
     return {name: running[name] for name in names if name in running}
 
@@ -203,7 +205,7 @@ def inspect_archive(generation, name):
                 raise SmokeError("archived service metadata differs from the installed bridge")
             script = installed.read_bytes()
             bridge = script if generation == "v1" else Path("/usr/local/bin/service").read_bytes()
-            if b"supervisorctl" not in bridge or b"/etc/supervisor/conf.d/supervisord.conf" not in bridge or \
+            if b"supervisorctl" not in bridge or PANEL_CONFIGS[generation].encode() not in bridge or \
                     (generation == "v2" and ("/usr/local/bin/service " + binary).encode() not in script):
                 raise SmokeError("snapshot service metadata must use the Supervisor bridge")
             records.append({"member": item.name, "sha256": sha, "mode": oct(mode), "uses_bridge": True})
@@ -317,7 +319,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("init", "server", "probe"))
     parser.add_argument("--generation", choices=("v1", "v2"), required=True)
+    parser.add_argument("--panel-config", choices=("/etc/supervisor/conf.d/supervisord.conf",
+                                                  "/etc/1panel/supervisord.conf"))
     args = parser.parse_args()
+    if args.panel_config:
+        PANEL_CONFIGS[args.generation] = args.panel_config
     if args.command == "probe":
         return probe(args.generation)
     try:

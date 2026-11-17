@@ -277,6 +277,7 @@ main() {
     validate_env
     setup_symlink
     init_offline
+    /usr/local/bin/setup-ssh.py "$EXT_APP_DIR"
     setup_services
     config_online &
     
@@ -287,7 +288,8 @@ main() {
     fi
 
     log "启动 Supervisor..."
-    exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
+    mkdir -p /run/1panel
+    exec /usr/bin/supervisord -c /etc/1panel/supervisord.conf
 }
 
 main

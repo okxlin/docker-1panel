@@ -1,0 +1,33 @@
+# Select the exact host data directory needed by container/Compose backups.
+# Repeat the PANEL_BACKUP_SOURCE bind for each additional source directory.
+services:
+  1panel:
+    image: ${PANEL_IMAGE:-moelin/1panel:v2}
+    container_name: 1panel-v2
+    restart: always
+    network_mode: host
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /opt
+        target: /opt
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${PANEL_BACKUP_SOURCE:?Set PANEL_BACKUP_SOURCE to the selected absolute host data path}
+        target: ${PANEL_BACKUP_SOURCE:?Set PANEL_BACKUP_SOURCE to the selected absolute host data path}
+        # Backup only needs reading. Restore requires an explicitly writable bind.
+        read_only: true
+        bind:
+          create_host_path: false
+    environment:
+      TZ: Asia/Shanghai
+      PORT: ${PANEL_PORT:-10086}
+      USERNAME: ${PANEL_USERNAME:-admin}
+      PASSWORD: ${PANEL_PASSWORD:?Set PANEL_PASSWORD before deployment}
+      ENTRANCE: ${PANEL_ENTRANCE:-entrance}
+      BASE_DIR: /opt

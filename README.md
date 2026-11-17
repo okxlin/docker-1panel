@@ -225,6 +225,52 @@ touch /data/1panel/.docker_initialized
 
 定时构建会重新拉取 Ubuntu 26.04 基础镜像、更新已安装软件包并禁用构建缓存，以获取当前架构可用的安全更新。
 
+### V2 容器与 Compose 备份
+
+Docker 的挂载源属于宿主机文件系统。即使面板能够通过 Docker socket 查看业务容器，也不能直接读取未挂入面板容器的文件。V2.5.1 在源目录不可见时可能跳过数据，仍把备份任务标为成功；本镜像提供手动检查工具，**不改变官方界面的成功判定**。
+
+备份前，在面板容器内检查选定的容器或 Compose 项目：
+
+```bash
+docker exec 1panel-v2 1panel-backup-check preflight \
+  --panel-container 1panel-v2 --container my-app
+
+# Compose 项目二选一；--container 也可重复指定
+docker exec 1panel-v2 1panel-backup-check preflight \
+  --panel-container 1panel-v2 --compose-project my-project
+```
+
+工具读取面板配置的同机 Unix Docker socket，核对实际 bind 与本地 named volume 的 `Source` 是否被面板的**同路径挂载**覆盖并可读。已有同名容器目录不能代替宿主机数据；嵌套挂载也会检查。需要补挂载时，将 [V2/compose.host-data.yml](V2/compose.host-data.yml) 的选定数据挂载合入现有配置，保留原有数据目录、账号和端口。例如：
+
+```bash
+export PANEL_BACKUP_SOURCE=/srv/my-app/data
+export PANEL_PASSWORD='your_secure_password'
+docker compose -f V2/compose.host-data.yml config
+# 核对配置后再重建面板容器
+docker compose -f V2/compose.host-data.yml up -d
+```
+
+示例只挂载明确选定、已经存在的绝对路径，默认只读；可为其他源重复添加挂载。named volume 可在宿主机用 `docker volume inspect --format '{{.Mountpoint}}' my-volume` 查询需要挂载的路径。不要为单个备份挂载整个宿主根目录。恢复写入源目录需要显式改为可写，并先单独测试恢复。
+
+面板完成备份后，再检查生成的容器／Compose `.tar.gz`，将下面的路径换成面板容器内实际可读的归档路径：
+
+```bash
+docker exec 1panel-v2 1panel-backup-check verify \
+  /opt/1panel/backup/your-backup.tar.gz
+```
+
+退出码 `0` 表示检查通过；非零退出并输出 `status: failed` 时不要依赖这份备份。`verify` 不解压，检查 manifest、inspect、持久挂载 payload、named volume 元数据和声明的 Compose 文件是否对应；tmpfs 明确排除。严格检查会拒绝链接、特殊文件和超出预算的归档，默认限制为 100,000 个 tar header 与累计 64 GiB 解压字节，可用 `--max-members`、`--max-bytes` 调整。它不能证明源文件校验和、运行中数据库的一致性、未声明的 `.env` 是否存在或恢复是否成功。重要业务仍需停写／应用原生备份和独立恢复演练。
+
+## V2 SSH 与 Supervisor
+
+V2 镜像包含 OpenSSH 客户端，支持面板生成 Ed25519、RSA 和 ECDSA 密钥。默认把 `/root/.ssh` 链接到持久化的面板数据目录 `ssh/`（默认 `/opt/1panel/ssh`），数据库中的 `/root/.ssh/...` 路径保持兼容。重建时复用原有面板数据挂载，密钥和 `authorized_keys` 就会保留；请把这个目录纳入受保护的备份范围，它包含私钥。
+
+升级时会保留并迁移容器里已有的普通 SSH 目录，原目录留在 `/root/.ssh.before-1panel`；冲突、未知链接或嵌套挂载会停止启动，避免覆盖密钥。已有 `/root` 或 `/root/.ssh` 外部挂载保持原样。旧容器中未持久化的密钥在删除容器后无法自动找回，升级前请先保存。[OpenSSH 从 10.0 起](https://www.openssh.org/txt/release-10.0) 已移除 DSA，旧 DSA 密钥需要换用支持的算法。V2 的“本地终端”通过 SSH 连接目标主机，需要目标主机的 SSH 服务和有效凭据。
+
+面板 Supervisor 使用独立的 `/etc/1panel/supervisord.conf`、`/run/1panel/supervisor.sock` 与 PID 文件。工具箱的业务 Supervisor 可以初始化、管理进程及重启自身，面板进程继续运行。`1pctl` 和面板服务兼容层会明确连接面板 Supervisor。
+
+业务 Supervisor 的配置仍在 `/etc/supervisor`，worker 配置／日志位于面板数据目录；仅保留 `/opt` 不能保证容器重建后恢复业务 daemon 的 include 配置和运行状态。需要保留业务配置时，单独持久化 `/etc/supervisor`，重建后在工具箱启动业务 Supervisor 并核对进程；没有保留配置时需重新初始化。它管理的是容器内进程，不能代替宿主机的 systemd 服务管理。
+
 ## 编译
 
 单架构本地构建：

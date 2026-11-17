@@ -1,6 +1,13 @@
 #!/bin/sh
 
 # Keep the panel's SysV service calls under the container's Supervisor.
+if [ "$#" -eq 2 ] && [ "$1" = supervisor ] && [ "$2" = restart ]; then
+    # Ubuntu's Supervisor SysV restart can stop the daemon without starting it.
+    /usr/sbin/service supervisor restart || exit "$?"
+    /usr/sbin/service supervisor status >/dev/null 2>&1 && exit 0
+    exec /usr/sbin/service supervisor start
+fi
+
 case "${1:-}" in
     1panel-core|1panel-core.service) program=1panel-core ;;
     1panel-agent|1panel-agent.service) program=1panel-agent ;;
@@ -15,7 +22,7 @@ fi
 
 case "$1" in
     start|stop|restart|status)
-        exec /usr/bin/supervisorctl -c /etc/supervisor/conf.d/supervisord.conf "$1" "$program"
+        exec /usr/bin/supervisorctl -c /etc/1panel/supervisord.conf "$1" "$program"
         ;;
     *)
         echo "Unsupported operation for $program: $1" >&2
