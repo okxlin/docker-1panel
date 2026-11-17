@@ -126,6 +126,49 @@ docker compose up -d
 image: moelin/1panel:global-v2
 ```
 
+### V2 虚拟机 (KVM)
+
+V2 的 `amd64`、`arm64` 镜像包含 libvirt 客户端与 `qemu-img`，可连接同一宿主机上的 libvirt，管理上游支持的虚拟机、ISO、模板、虚拟机快照、网络和存储池。虚拟机与 libvirt 服务运行在宿主机；重建面板容器不会终止虚拟机。普通部署仍按上面的配置运行。
+
+1Panel 从 [v2.5.0](https://github.com/1Panel-dev/1Panel/releases/tag/v2.5.0) 起向社区版开放虚拟机管理。V2.5.1 的数量限制为社区版 1 台、专业版 5 台、企业版不限；其他授权规则由上游决定。V1 和其他 CPU 架构不支持此功能。
+
+宿主机需要 Linux KVM、可访问的 `/dev/kvm`，以及安装并启动的 QEMU/libvirt。先在宿主机检查：
+
+```bash
+test -c /dev/kvm
+virsh --connect qemu:///system list --all
+mkdir -p /var/lib/libvirt/images /var/lib/libvirt/boot
+```
+
+使用发行版提供的 libvirt 服务与 QEMU 包。采用模块化 daemon 时，需要 QEMU、网络和存储驱动对应的服务/socket；示例挂载整个 `/run/libvirt`，兼容 socket 更新。ARM64 宿主机还需要 `qemu-system-aarch64` 与 `qemu-efi-aarch64`，并让面板容器和宿主机都能访问相同路径的 UEFI 固件。镜像内已安装 `qemu-efi-aarch64`；使用其他发行版的固件时，请按原路径额外挂载对应固件目录。
+
+将 [V2/compose.host-libvirt.yml](V2/compose.host-libvirt.yml) 的 KVM 与 libvirt 挂载合入现有配置，或从仓库根目录启动示例：
+
+```bash
+export PANEL_PASSWORD='your_secure_password'
+# 国际版启动前可设置 PANEL_IMAGE=moelin/1panel:global-v2
+docker compose -f V2/compose.host-libvirt.yml up -d
+```
+
+迁移已有容器时保留原来的数据挂载、`BASE_DIR`、端口、入口与账号配置，并按下文确认 `.docker_initialized` 标记。示例的 `PANEL_*` 变量仅用于 Compose 参数替换。
+
+| 挂载/配置 | 用途 |
+| --- | --- |
+| `/dev/kvm` | 供面板检查 KVM 设备；虚拟机由宿主机 libvirt 使用 KVM 启动 |
+| `/run/libvirt` | 连接宿主机 libvirt Unix socket |
+| `/var/lib/libvirt/images` | 默认磁盘、模板和虚拟机快照文件 |
+| `/var/lib/libvirt/boot` | libvirt 默认 ISO 目录 |
+| `network_mode: host` | 查看宿主机网卡/桥，并访问 libvirt 的本机 VNC 控制台 |
+
+自定义磁盘、ISO 或存储池目录必须以**宿主机与容器相同的绝对路径**读写挂载，否则面板创建或转换的文件无法被宿主机 QEMU 使用。保持宿主机原有的 QEMU 文件权限、SELinux/AppArmor 策略。虚拟机磁盘和 libvirt 配置应另外备份；面板系统快照不覆盖这些外部目录。
+
+> [!CAUTION]
+> libvirt 的系统管理 socket 可创建、修改和删除宿主机虚拟机，权限相当于宿主机管理员。`/run/libvirt` 的只读目录挂载不会限制 socket 的管理调用。仅向可信面板和管理员提供该挂载；示例无需 `privileged`、宿主机 PID namespace、宿主根目录或 `/sys/fs/cgroup` 挂载。
+
+容器内可运行 `virsh --connect qemu:///system list --all` 检查连接。面板的环境检测会报告缺少设备、目录或 socket；页面的“启动环境”操作不能启动宿主机服务，应在宿主机上管理 libvirt。NAT、桥接、macvtap 与设备直通的实际可用范围取决于宿主机网络/硬件和上游界面，不会因添加设备映射自动获得支持。
+
+本项目使用隔离的真实 libvirt/TCG 环境验证客户端连接、资源与生命周期操作；TCG 测试不能证明 KVM 硬件加速。部署后仍需在目标宿主机验证虚拟机启动和控制台。libvirt 的连接与权限说明见 [Connection URIs](https://libvirt.org/uri.html#qemu-qemu-and-kvm-uris) 和 [Libvirt Daemons](https://libvirt.org/daemons.html#operating-modes)。
+
 ## 环境变量
 
 | 变量 | 默认值 | 说明 |

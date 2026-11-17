@@ -126,6 +126,49 @@ For V2 Global, change the image:
 image: moelin/1panel:global-v2
 ```
 
+### V2 Virtual Machines (KVM)
+
+The V2 `amd64` and `arm64` images include libvirt clients and `qemu-img`. They connect to libvirt on the same host to manage upstream-supported VMs, ISOs, templates, VM snapshots, networks and storage pools. Libvirt and the VMs run on the host, so recreating the panel container does not stop the VMs. Use the existing configuration above for ordinary deployments.
+
+1Panel opened VM management to the Community edition in [v2.5.0](https://github.com/1Panel-dev/1Panel/releases/tag/v2.5.0). V2.5.1 allows 1 VM in Community, 5 in Professional, and unlimited VMs in Enterprise; other licensing rules remain upstream-controlled. V1 and other CPU architectures do not support this feature.
+
+The Linux host needs KVM, an accessible `/dev/kvm`, and installed, running QEMU/libvirt. Check on the host first:
+
+```bash
+test -c /dev/kvm
+virsh --connect qemu:///system list --all
+mkdir -p /var/lib/libvirt/images /var/lib/libvirt/boot
+```
+
+Use your distribution's libvirt services and QEMU packages. Modular daemons need the corresponding QEMU, network and storage services/sockets; the example mounts the entire `/run/libvirt` directory so socket replacement works. ARM64 hosts also need `qemu-system-aarch64` and `qemu-efi-aarch64`, with UEFI firmware accessible at the same paths on the host and in the panel container. The image includes `qemu-efi-aarch64`; mount the firmware directory at its original path when using another distribution's firmware.
+
+Add the KVM and libvirt mounts from [V2/compose.host-libvirt.yml](V2/compose.host-libvirt.yml) to your existing configuration, or start the example from the repository root:
+
+```bash
+export PANEL_PASSWORD='your_secure_password'
+# For Global, set PANEL_IMAGE=moelin/1panel:global-v2 before starting
+docker compose -f V2/compose.host-libvirt.yml up -d
+```
+
+When migrating an existing container, keep its data mounts, `BASE_DIR`, port, entrance and account configuration, and check the `.docker_initialized` marker described below. The example's `PANEL_*` variables are only Compose substitutions.
+
+| Mount/configuration | Purpose |
+| --- | --- |
+| `/dev/kvm` | Panel environment checks; host libvirt starts the VMs using KVM |
+| `/run/libvirt` | Connection to host libvirt Unix sockets |
+| `/var/lib/libvirt/images` | Default VM disks, templates and VM snapshot files |
+| `/var/lib/libvirt/boot` | Libvirt's default ISO directory |
+| `network_mode: host` | Host interface/bridge discovery and access to local libvirt VNC consoles |
+
+Mount custom disk, ISO and storage-pool directories read-write at **the same absolute paths on the host and container**. Otherwise files created or converted by the panel cannot be used by host QEMU. Preserve the host's QEMU file permissions and SELinux/AppArmor policy. Back up VM disks and libvirt configuration separately; panel system snapshots do not cover these external directories.
+
+> [!CAUTION]
+> The system libvirt socket grants control to create, modify and delete host VMs, with host administrator privileges. A read-only directory mount of `/run/libvirt` does not restrict socket management calls. Give this mount only to a trusted panel and administrators. The example requires no `privileged` mode, host PID namespace, host root filesystem or `/sys/fs/cgroup` mount.
+
+Run `virsh --connect qemu:///system list --all` inside the container to check connectivity. Panel environment checks report missing devices, directories and sockets. The page's environment-start operation cannot start host services; manage libvirt on the host. NAT, bridges, macvtap and device passthrough depend on host networking/hardware and the upstream interface; adding a device mapping alone does not enable them.
+
+The project uses isolated real libvirt/TCG tests for client connectivity, resources and lifecycle operations. TCG does not verify KVM hardware acceleration. Verify VM startup and console access on the deployment host. See libvirt's [Connection URIs](https://libvirt.org/uri.html#qemu-qemu-and-kvm-uris) and [Libvirt Daemons](https://libvirt.org/daemons.html#operating-modes) for connection and permission details.
+
 ## Environment Variables
 
 | Variable | Default | Description |

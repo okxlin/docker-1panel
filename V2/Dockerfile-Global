@@ -43,6 +43,10 @@ RUN apt_install_with_retry() { \
     rm -f /tmp/docker.gpg.asc && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list && \
     apt_install_with_retry docker-ce-cli docker-compose-plugin supervisor && \
+    case "$(dpkg --print-architecture)" in \
+        amd64) apt_install_with_retry libvirt-clients qemu-utils ;; \
+        arm64) apt_install_with_retry libvirt-clients qemu-utils qemu-efi-aarch64 ;; \
+    esac && \
     printf '%s\n' '#!/bin/sh' 'exec docker compose "$@"' > /usr/local/bin/docker-compose && \
     chmod +x /usr/local/bin/docker-compose && \
     ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose && \

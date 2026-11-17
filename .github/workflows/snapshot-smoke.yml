@@ -37,6 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile tests/snapshot_smoke.py tests/snapshot_fixture.py
+          python3 -m py_compile tests/libvirt_smoke.py tests/libvirt_fixture.py
           context="${GENERATION^^}"
           bash -n "$context/entrypoint.sh" "$context/1pctl" "$context/install-${GENERATION}.override.sh"
           if [[ "$GENERATION" == "v2" ]]; then
@@ -63,3 +64,21 @@ jobs:
             --image "snapshot-smoke:${GENERATION}-${EDITION}" \
             --generation "$GENERATION" \
             --artifacts-dir "$RUNNER_TEMP/snapshot-smoke"
+      - name: Build isolated libvirt and TCG fixture
+        if: env.GENERATION == 'v2'
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --platform linux/amd64 \
+            --build-arg "PANEL_IMAGE=snapshot-smoke:${GENERATION}-${EDITION}" \
+            --file tests/Dockerfile.libvirt \
+            --tag "libvirt-fixture:${EDITION}" tests
+      - name: Exercise real libvirt API, TCG lifecycle and console
+        if: env.GENERATION == 'v2'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/libvirt_smoke.py \
+            --image "snapshot-smoke:${GENERATION}-${EDITION}" \
+            --fixture-image "libvirt-fixture:${EDITION}" \
+            --artifacts-dir "$RUNNER_TEMP/libvirt-smoke"
