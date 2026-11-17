@@ -225,6 +225,52 @@ Create a fresh snapshot after updating the image. Restore with the same panel ma
 
 Scheduled builds pull the Ubuntu 26.04 base image, upgrade installed packages, and disable build caching to obtain the security updates available for each architecture.
 
+### V2 Container And Compose Backups
+
+Docker mount sources belong to the host filesystem. Access to the Docker socket lets the panel inspect application containers, but does not let it read files that are absent from its own mounts. V2.5.1 may skip inaccessible data while marking the backup task successful. This image provides manual checks; **it does not change the upstream UI's success decision**.
+
+Before backing up, check selected containers or a Compose project inside the panel container:
+
+```bash
+docker exec 1panel-v2 1panel-backup-check preflight \
+  --panel-container 1panel-v2 --container my-app
+
+# Alternatively, select a Compose project; --container can also be repeated
+docker exec 1panel-v2 1panel-backup-check preflight \
+  --panel-container 1panel-v2 --compose-project my-project
+```
+
+The tool uses the panel's configured same-host Unix Docker socket. It checks that actual bind and local named-volume `Source` paths have readable **same-path mounts** in the panel. An unrelated existing container directory does not prove access to host data; nested mounts are checked too. Add selected data mounts from [V2/compose.host-data.yml](V2/compose.host-data.yml) to your existing configuration, keeping its data directory, credentials and ports. For example:
+
+```bash
+export PANEL_BACKUP_SOURCE=/srv/my-app/data
+export PANEL_PASSWORD='your_secure_password'
+docker compose -f V2/compose.host-data.yml config
+# Recreate the panel only after checking the configuration
+docker compose -f V2/compose.host-data.yml up -d
+```
+
+The example mounts one explicitly selected, existing absolute path read-only. Repeat the mount for other sources. On the host, use `docker volume inspect --format '{{.Mountpoint}}' my-volume` to find a named volume's source path. Avoid mounting the entire host root for a single backup. Restoring data needs an explicitly writable source mount and a separate restore test first.
+
+After the panel finishes its backup, check the container/Compose `.tar.gz`. Replace the path below with the actual archive path readable inside the panel container:
+
+```bash
+docker exec 1panel-v2 1panel-backup-check verify \
+  /opt/1panel/backup/your-backup.tar.gz
+```
+
+Exit code `0` means the check passed. A nonzero exit with `status: failed` means you should not rely on that backup. Without extracting files, `verify` checks correspondence between the manifest, inspect data, persistent mount payloads, named-volume metadata and declared Compose files; it explicitly excludes tmpfs. Strict checking rejects links, special files and archives exceeding its budgets, which default to 100,000 tar headers and 64 GiB of cumulative decompressed bytes. Adjust them with `--max-members` and `--max-bytes`. These checks cannot prove original-file checksums, consistency of a live database, the presence of an undeclared `.env`, or successful restoration. Important applications still need paused writes or native backups and an independent restore drill.
+
+## V2 SSH And Supervisor
+
+V2 images include the OpenSSH client and support panel-generated Ed25519, RSA and ECDSA keys. By default, `/root/.ssh` links to `ssh/` in the persistent panel data directory (`/opt/1panel/ssh` by default), preserving the database's `/root/.ssh/...` paths. Reuse the original panel data mount when recreating the container to keep keys and `authorized_keys`. Include this directory in protected backups because it contains private keys.
+
+On upgrade, an existing ordinary SSH directory is preserved and migrated, with the original left at `/root/.ssh.before-1panel`. Conflicts, unknown links and nested mounts stop startup to avoid overwriting keys. Existing external `/root` or `/root/.ssh` mounts are kept in place. Keys stored only in an old container cannot be recovered automatically after that container is deleted; save them before upgrading. [OpenSSH removed DSA from 10.0 onward](https://www.openssh.org/txt/release-10.0), so replace old DSA keys with a supported algorithm. V2's local terminal connects to the target host over SSH and needs that host's SSH service and valid credentials.
+
+Panel Supervisor uses its own `/etc/1panel/supervisord.conf`, `/run/1panel/supervisor.sock` and PID file. The toolbox's business Supervisor can initialize, manage processes and restart itself while panel processes keep running. `1pctl` and the panel service bridge explicitly select panel Supervisor.
+
+Business Supervisor configuration remains in `/etc/supervisor`, with worker configuration/logs in the panel data directory. Keeping `/opt` alone does not guarantee restoration of daemon include configuration or running state after recreation. To keep business configuration, persist `/etc/supervisor` separately, then start business Supervisor in the toolbox and check its processes after recreation. Reinitialize it if the configuration was not kept. It manages processes inside the container and does not replace host systemd service management.
+
 ## Build
 
 Local single-architecture builds:

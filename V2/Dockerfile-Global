@@ -34,7 +34,7 @@ RUN apt_install_with_retry() { \
     done; \
 } && \
     apt_install_with_retry \
-    curl wget tar unzip zip git sudo gnupg sqlite3 tzdata \
+    curl wget tar unzip zip git sudo gnupg sqlite3 tzdata openssh-client \
     expect ca-certificates lsb-release && \
     ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /tmp/docker.gpg.asc && \
@@ -58,8 +58,11 @@ COPY ./1pctl /app/1pctl.custom
 COPY ./install-v2.override.sh /app/install-v2.override.sh
 COPY ./entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY --chmod=755 ./service /usr/local/bin/service
-COPY ./supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY --chmod=755 ./setup-ssh.py /usr/local/bin/setup-ssh.py
+COPY --chmod=755 ./backup-check /usr/local/bin/1panel-backup-check
+COPY ./supervisord.conf /etc/1panel/supervisord.conf
 
+# Remove the pre-generated local SSH identity in this same layer. Each new data directory regenerates it at runtime.
 RUN chmod +x /usr/local/bin/entrypoint.sh && \
     chmod +x /app/install-v2.override.sh && \
     if [ -z "$PANELVER" ]; then \
@@ -95,7 +98,16 @@ RUN chmod +x /usr/local/bin/entrypoint.sh && \
     (timeout 5s /usr/local/bin/1panel-agent || true) && \
     if [ -f /opt/1panel/db/core.db ] && [ -f /opt/1panel/db/agent.db ]; then \
     echo "Database generated successfully." && \
-    mv /opt/1panel/* /usr/share/1panel-default/; \
+    sqlite3 /opt/1panel/db/agent.db \
+        "DELETE FROM root_certs WHERE name='id_ed25519_1panel' AND private_key_path='/root/.ssh/id_ed25519_1panel' AND public_key_path='/root/.ssh/id_ed25519_1panel.pub'; DELETE FROM migrations WHERE id='20250905-init-local-ssh'; UPDATE settings SET value='' WHERE key='LocalSSHConn';" && \
+    test "$(sqlite3 /opt/1panel/db/agent.db 'SELECT COUNT(*) FROM root_certs;')" = 0 && \
+    test ! -L /root/.ssh && \
+    if [ -d /root/.ssh ]; then \
+        rm -f /root/.ssh/id_ed25519_1panel /root/.ssh/id_ed25519_1panel.pub /root/.ssh/authorized_keys && \
+        rmdir /root/.ssh; \
+    fi && \
+    test ! -e /root/.ssh && \
+    mv /opt/1panel/* /usr/share/1panel-default/ && \
     rm -rf /opt/1panel/*; \
     else \
     echo "Error: Database generation failed. Core log:" && \

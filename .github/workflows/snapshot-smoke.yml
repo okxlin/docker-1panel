@@ -42,6 +42,13 @@ jobs:
           bash -n "$context/entrypoint.sh" "$context/1pctl" "$context/install-${GENERATION}.override.sh"
           if [[ "$GENERATION" == "v2" ]]; then
             sh -n V2/service
+            python3 -m py_compile V2/setup-ssh.py V2/backup-check \
+              tests/ssh_setup_test.py tests/backup_check_test.py \
+              tests/ssh_smoke.py tests/ssh_fixture.py \
+              tests/supervisor_smoke.py tests/supervisor_fixture.py \
+              tests/backup_smoke.py tests/backup_fixture.py
+            python3 -B tests/ssh_setup_test.py
+            python3 -B tests/backup_check_test.py
           fi
       - name: Build native amd64 image
         shell: bash
@@ -64,6 +71,32 @@ jobs:
             --image "snapshot-smoke:${GENERATION}-${EDITION}" \
             --generation "$GENERATION" \
             --artifacts-dir "$RUNNER_TEMP/snapshot-smoke"
+      - name: Exercise SSH generation and key persistence after recreation
+        if: env.GENERATION == 'v2'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B tests/ssh_smoke.py \
+            --image "snapshot-smoke:${GENERATION}-${EDITION}" \
+            --artifacts-dir "$RUNNER_TEMP/ssh-smoke"
+      - name: Exercise business Supervisor without restarting the panel
+        if: env.GENERATION == 'v2'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B tests/supervisor_smoke.py \
+            --image "snapshot-smoke:${GENERATION}-${EDITION}" \
+            --artifacts-dir "$RUNNER_TEMP/supervisor-smoke"
+      - name: Exercise backup visibility and real archive coverage
+        if: env.GENERATION == 'v2'
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull ubuntu:26.04
+          python3 -B tests/backup_smoke.py \
+            --image "snapshot-smoke:${GENERATION}-${EDITION}" \
+            --data-image ubuntu:26.04 \
+            --artifacts-dir "$RUNNER_TEMP/backup-smoke"
       - name: Build isolated libvirt and TCG fixture
         if: env.GENERATION == 'v2'
         shell: bash
