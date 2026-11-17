@@ -1,0 +1,42 @@
+services:
+  1panel:
+    image: ${PANEL_IMAGE:-moelin/1panel:v2}
+    container_name: 1panel-v2
+    restart: always
+    network_mode: host
+    devices:
+      - /dev/kvm:/dev/kvm:rw
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /opt
+        target: /opt
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /run/libvirt
+        target: /run/libvirt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /var/lib/libvirt/images
+        target: /var/lib/libvirt/images
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /var/lib/libvirt/boot
+        target: /var/lib/libvirt/boot
+        bind:
+          create_host_path: false
+    environment:
+      TZ: Asia/Shanghai
+      PORT: ${PANEL_PORT:-10086}
+      USERNAME: ${PANEL_USERNAME:-admin}
+      PASSWORD: ${PANEL_PASSWORD:?Set PANEL_PASSWORD before deployment}
+      ENTRANCE: ${PANEL_ENTRANCE:-entrance}
+      BASE_DIR: /opt
