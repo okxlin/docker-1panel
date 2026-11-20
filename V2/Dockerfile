@@ -62,7 +62,7 @@ COPY --chmod=755 ./setup-ssh.py /usr/local/bin/setup-ssh.py
 COPY --chmod=755 ./backup-check /usr/local/bin/1panel-backup-check
 COPY ./supervisord.conf /etc/1panel/supervisord.conf
 
-# Remove the pre-generated local SSH identity in this same layer. Each new data directory regenerates it at runtime.
+# Remove the build-time SSH identity and Agent IPC in this same layer. New data regenerates SSH keys at runtime.
 RUN chmod +x /usr/local/bin/entrypoint.sh && \
     chmod +x /app/install-v2.override.sh && \
     if [ -z "$PANELVER" ]; then \
@@ -107,6 +107,8 @@ RUN chmod +x /usr/local/bin/entrypoint.sh && \
         rmdir /root/.ssh; \
     fi && \
     test ! -e /root/.ssh && \
+    rm -f /etc/1panel/agent.sock && \
+    test ! -e /etc/1panel/agent.sock && \
     mv /opt/1panel/* /usr/share/1panel-default/ && \
     rm -rf /opt/1panel/*; \
     else \
