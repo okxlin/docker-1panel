@@ -132,7 +132,17 @@ V2 的 `amd64`、`arm64` 镜像包含 libvirt 客户端与 `qemu-img`，可连�
 
 1Panel 从 [v2.5.0](https://github.com/1Panel-dev/1Panel/releases/tag/v2.5.0) 起向社区版开放虚拟机管理。V2.5.1 的数量限制为社区版 1 台、专业版 5 台、企业版不限；其他授权规则由上游决定。V1 和其他 CPU 架构不支持此功能。
 
-宿主机需要 Linux KVM、可访问的 `/dev/kvm`，以及安装并启动的 QEMU/libvirt。先在宿主机检查：
+宿主机需要 Linux KVM、可访问的 `/dev/kvm`，以及安装并启动的 QEMU/libvirt。
+
+Debian 12 的 `amd64` 宿主机使用传统 `libvirtd` 模式时，以 root 执行：
+
+```bash
+apt-get update
+apt-get install -y qemu-system-x86 libvirt-daemon-system libvirt-clients
+systemctl start libvirtd.socket virtlogd.socket virtlockd.socket
+```
+
+随后在宿主机检查：
 
 ```bash
 test -c /dev/kvm
@@ -167,7 +177,7 @@ docker compose -f V2/compose.host-libvirt.yml up -d
 
 容器内可运行 `virsh --connect qemu:///system list --all` 检查连接。面板的环境检测会报告缺少设备、目录或 socket；页面的“启动环境”操作不能启动宿主机服务，应在宿主机上管理 libvirt。NAT、桥接、macvtap 与设备直通的实际可用范围取决于宿主机网络/硬件和上游界面，不会因添加设备映射自动获得支持。
 
-本项目使用隔离的真实 libvirt/TCG 环境验证客户端连接、资源与生命周期操作；TCG 测试不能证明 KVM 硬件加速。部署后仍需在目标宿主机验证虚拟机启动和控制台。libvirt 的连接与权限说明见 [Connection URIs](https://libvirt.org/uri.html#qemu-qemu-and-kvm-uris) 和 [Libvirt Daemons](https://libvirt.org/daemons.html#operating-modes)。
+本项目使用隔离的真实 libvirt/TCG 环境验证客户端连接、资源与生命周期操作，并在 Debian 12 `amd64` 宿主机上验证 CN/Global 镜像的原生 KVM 启动、面板发现与暂停/恢复，使用 `query-kvm` 确认硬件加速。原生 KVM 测试使用无磁盘、无网络接口的瞬态虚拟机；客体安装、网络和浏览器控制台仍需在部署宿主机验证。libvirt 的连接与权限说明见 [Connection URIs](https://libvirt.org/uri.html#qemu-qemu-and-kvm-uris) 和 [Libvirt Daemons](https://libvirt.org/daemons.html#operating-modes)。
 
 ## 环境变量
 
@@ -177,9 +187,11 @@ docker compose -f V2/compose.host-libvirt.yml up -d
 | `USERNAME` | `1panel` | 管理员用户名 |
 | `PASSWORD` | `1panel_password` | 管理员密码；空值或默认值会在首次启动时生成随机密码 |
 | `ENTRANCE` | `entrance` | 安全入口路径，不需要前后 `/` |
-| `BASE_DIR` | `/opt` | 1Panel 数据目录。映射到宿主机时应填写宿主机真实路径 |
+| `BASE_DIR` | `/opt` | 1Panel 基础路径；容器内面板数据位于 `${BASE_DIR}/1panel`。该目录须由数据挂载覆盖；通过宿主机 Docker socket 部署应用时，使用宿主机与容器相同的绝对路径 |
 | `TZ` | `Asia/Shanghai` | 容器时区 |
 | `RESET` | `false` | 设为 `true` 可在启动时重置账号、密码、端口和入口 |
+
+新部署使用其他数据路径时，可挂载 `/srv/panel:/srv/panel` 并设置 `BASE_DIR=/srv/panel`，面板数据位于 `/srv/panel/1panel`。已有部署升级时保留原数据挂载与 `BASE_DIR`。
 
 随机密码会输出到容器日志：
 
@@ -192,11 +204,12 @@ docker logs 1panel-v2
 
 ## 旧数据与密码重置
 
-容器启动时会用数据目录里的 `.docker_initialized` 判断是否已经完成过 Docker 初始化。默认数据目录是 `/opt/1panel`；如果设置了 `BASE_DIR=/data`，对应宿主机路径就是 `/data/1panel/.docker_initialized`。
+容器启动时会用数据目录里的 `.docker_initialized` 判断是否已经完成过 Docker 初始化。默认容器路径是 `/opt/1panel/.docker_initialized`；设置 `BASE_DIR=/data` 时，容器路径是 `/data/1panel/.docker_initialized`。标记文件在宿主机上的位置由数据挂载的 `source` 与 `target` 对应关系决定。
 
 已有旧数据时，如果数据库存在但没有这个标记文件，入口脚本会按“首次初始化”处理，并根据 `USERNAME`、`PASSWORD`、`PORT`、`ENTRANCE` 重新配置账号、密码、端口和入口。为了保留旧账号密码，请在启动新容器前确认标记文件存在：
 
 ```bash
+# 在宿主机执行；以下示例要求宿主 source 与容器 target 使用相同路径
 # 默认 BASE_DIR=/opt
 touch /opt/1panel/.docker_initialized
 
@@ -206,7 +219,9 @@ touch /data/1panel/.docker_initialized
 
 同时不要设置 `RESET=true`。`RESET=true` 会强制重新配置账号、密码、端口和入口，即使 `.docker_initialized` 已存在。
 
-数据库文件位置：
+V2 每次启动都会把 `PORT` 和 `BASE_DIR` 写入数据库，不受 `.docker_initialized` 或 `RESET` 影响；升级时须保留原值。
+
+数据库文件位置（默认 `BASE_DIR=/opt`）。自定义 `BASE_DIR` 时，容器内的 `/opt/1panel` 链接到 `${BASE_DIR}/1panel`，持久数据位于 `${BASE_DIR}/1panel/db`：
 
 ```bash
 # V1
@@ -240,7 +255,7 @@ docker exec 1panel-v2 1panel-backup-check preflight \
   --panel-container 1panel-v2 --compose-project my-project
 ```
 
-工具读取面板配置的同机 Unix Docker socket，核对实际 bind 与本地 named volume 的 `Source` 是否被面板的**同路径挂载**覆盖并可读。已有同名容器目录不能代替宿主机数据；嵌套挂载也会检查。需要补挂载时，将 [V2/compose.host-data.yml](V2/compose.host-data.yml) 的选定数据挂载合入现有配置，保留原有数据目录、账号和端口。例如：
+工具读取面板配置的同机 Unix Docker socket，核对实际 bind 与本地 named volume 的 `Source` 是否被面板的**同路径挂载**覆盖并可读。已有同名容器目录不能代替宿主机数据；检查选定源路径时，以覆盖该路径的最深挂载为准，不递归验证源目录内的所有文件或子挂载。需要补挂载时，将 [V2/compose.host-data.yml](V2/compose.host-data.yml) 的选定数据挂载合入现有配置，保留原有数据目录、账号和端口。例如：
 
 ```bash
 export PANEL_BACKUP_SOURCE=/srv/my-app/data
@@ -263,7 +278,7 @@ docker exec 1panel-v2 1panel-backup-check verify \
 
 ## V2 SSH 与 Supervisor
 
-V2 镜像包含 OpenSSH 客户端，支持面板生成 Ed25519、RSA 和 ECDSA 密钥。默认把 `/root/.ssh` 链接到持久化的面板数据目录 `ssh/`（默认 `/opt/1panel/ssh`），数据库中的 `/root/.ssh/...` 路径保持兼容。重建时复用原有面板数据挂载，密钥和 `authorized_keys` 就会保留；请把这个目录纳入受保护的备份范围，它包含私钥。
+V2 镜像包含 OpenSSH 客户端，支持面板生成 Ed25519、RSA 和 ECDSA 密钥。默认把 `/root/.ssh` 链接到持久化的面板数据目录 `ssh/`，即 `${BASE_DIR}/1panel/ssh`（默认 `/opt/1panel/ssh`），数据库中的 `/root/.ssh/...` 路径保持兼容。重建时复用原有面板数据挂载，密钥和 `authorized_keys` 就会保留；请把这个目录纳入受保护的备份范围，它包含私钥。
 
 升级时会保留并迁移容器里已有的普通 SSH 目录，原目录留在 `/root/.ssh.before-1panel`；冲突、未知链接或嵌套挂载会停止启动，避免覆盖密钥。已有 `/root` 或 `/root/.ssh` 外部挂载保持原样。旧容器中未持久化的密钥在删除容器后无法自动找回，升级前请先保存。[OpenSSH 从 10.0 起](https://www.openssh.org/txt/release-10.0) 已移除 DSA，旧 DSA 密钥需要换用支持的算法。V2 的“本地终端”通过 SSH 连接目标主机，需要目标主机的 SSH 服务和有效凭据。
 
@@ -308,14 +323,14 @@ docker build \
   ./V2
 ```
 
-多架构构建并推送：
+多架构构建并推送（先将 `<your-dockerhub-username>` 替换为自己的 Docker Hub 用户名）：
 
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le,linux/s390x \
   --build-arg PANELVER=v2.5.1 \
-  -t <your-dockerhub-username>/1panel:v2.5.1 \
-  -t <your-dockerhub-username>/1panel:v2 \
+  -t "<your-dockerhub-username>/1panel:v2.5.1" \
+  -t "<your-dockerhub-username>/1panel:v2" \
   --push \
   ./V2
 
@@ -323,8 +338,8 @@ docker buildx build \
   --platform linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le,linux/s390x \
   -f ./V2/Dockerfile-Global \
   --build-arg PANELVER=v2.5.1 \
-  -t <your-dockerhub-username>/1panel:global-v2.5.1 \
-  -t <your-dockerhub-username>/1panel:global-v2 \
+  -t "<your-dockerhub-username>/1panel:global-v2.5.1" \
+  -t "<your-dockerhub-username>/1panel:global-v2" \
   --push \
   ./V2
 ```
