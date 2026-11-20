@@ -177,9 +177,11 @@ The project uses isolated real libvirt/TCG tests for client connectivity, resour
 | `USERNAME` | `1panel` | Administrator username |
 | `PASSWORD` | `1panel_password` | Administrator password. Empty values and the default value generate a random password on first startup |
 | `ENTRANCE` | `entrance` | Security entrance path, without leading or trailing `/` |
-| `BASE_DIR` | `/opt` | 1Panel data directory. When you bind-mount it, set this to the real host path |
+| `BASE_DIR` | `/opt` | 1Panel base path. Panel data inside the container is stored at `${BASE_DIR}/1panel` and must be covered by the data mount. When deploying applications through the host Docker socket, use the same absolute paths on the host and container |
 | `TZ` | `Asia/Shanghai` | Container timezone |
 | `RESET` | `false` | Set to `true` to reset username, password, port, and entrance on startup |
+
+For a new deployment with a different data path, mount `/srv/panel:/srv/panel` and set `BASE_DIR=/srv/panel`. Panel data is stored at `/srv/panel/1panel`. Keep the original data mounts and `BASE_DIR` when upgrading an existing deployment.
 
 The container logs print the random password:
 
@@ -192,11 +194,12 @@ docker logs 1panel-v2
 
 ## Existing Data And Password Resets
 
-The entrypoint uses `.docker_initialized` in the data directory to decide whether Docker initialization has already run. The default data directory is `/opt/1panel`. If you set `BASE_DIR=/data`, the marker path becomes `/data/1panel/.docker_initialized` on the host.
+The entrypoint uses `.docker_initialized` in the data directory to decide whether Docker initialization has already run. Its default container path is `/opt/1panel/.docker_initialized`; with `BASE_DIR=/data`, it is `/data/1panel/.docker_initialized`. The host location depends on the data mount's `source` and `target` mapping.
 
 If you have existing data and the database exists without this marker file, the entrypoint treats the container as a first startup. It then applies `USERNAME`, `PASSWORD`, `PORT`, and `ENTRANCE`, which can change the old username, password, port, and entrance. To keep existing credentials, create the marker before starting the new container:
 
 ```bash
+# Run on the host; these examples require identical host source and container target paths
 # Default BASE_DIR=/opt
 touch /opt/1panel/.docker_initialized
 
@@ -263,7 +266,7 @@ Exit code `0` means the check passed. A nonzero exit with `status: failed` means
 
 ## V2 SSH And Supervisor
 
-V2 images include the OpenSSH client and support panel-generated Ed25519, RSA and ECDSA keys. By default, `/root/.ssh` links to `ssh/` in the persistent panel data directory (`/opt/1panel/ssh` by default), preserving the database's `/root/.ssh/...` paths. Reuse the original panel data mount when recreating the container to keep keys and `authorized_keys`. Include this directory in protected backups because it contains private keys.
+V2 images include the OpenSSH client and support panel-generated Ed25519, RSA and ECDSA keys. By default, `/root/.ssh` links to `ssh/` in the persistent panel data directory, `${BASE_DIR}/1panel/ssh` (`/opt/1panel/ssh` by default), preserving the database's `/root/.ssh/...` paths. Reuse the original panel data mount when recreating the container to keep keys and `authorized_keys`. Include this directory in protected backups because it contains private keys.
 
 On upgrade, an existing ordinary SSH directory is preserved and migrated, with the original left at `/root/.ssh.before-1panel`. Conflicts, unknown links and nested mounts stop startup to avoid overwriting keys. Existing external `/root` or `/root/.ssh` mounts are kept in place. Keys stored only in an old container cannot be recovered automatically after that container is deleted; save them before upgrading. [OpenSSH removed DSA from 10.0 onward](https://www.openssh.org/txt/release-10.0), so replace old DSA keys with a supported algorithm. V2's local terminal connects to the target host over SSH and needs that host's SSH service and valid credentials.
 
