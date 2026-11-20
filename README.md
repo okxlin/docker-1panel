@@ -267,6 +267,16 @@ V2 镜像包含 OpenSSH 客户端，支持面板生成 Ed25519、RSA 和 ECDSA �
 
 升级时会保留并迁移容器里已有的普通 SSH 目录，原目录留在 `/root/.ssh.before-1panel`；冲突、未知链接或嵌套挂载会停止启动，避免覆盖密钥。已有 `/root` 或 `/root/.ssh` 外部挂载保持原样。旧容器中未持久化的密钥在删除容器后无法自动找回，升级前请先保存。[OpenSSH 从 10.0 起](https://www.openssh.org/txt/release-10.0) 已移除 DSA，旧 DSA 密钥需要换用支持的算法。V2 的“本地终端”通过 SSH 连接目标主机，需要目标主机的 SSH 服务和有效凭据。
 
+旧 SSH 目录迁移要求目标文件系统支持 [Linux 原子不覆盖重命名](https://man7.org/linux/man-pages/man2/rename.2.html)（`renameat2(RENAME_NOREPLACE)`）；不支持时会明确报错并停止启动，保留原目录与密钥，macOS/VirtioFS 上该操作的支持尚未实测。
+
+普通 V2 部署沿用原有的数据挂载、`BASE_DIR`、端口、入口与账号配置即可，默认 SSH 密钥继续保存在面板数据目录 `ssh/`。这次权限兼容修补不要求增加 SSH volume 或修改 Compose。镜像保留所选面板数据目录的宿主 UID 和原有权限。
+
+默认 SSH 持久化检查接受由面板运行用户（镜像内为 `root`）或所选数据目录所有者拥有的目录、文件及初始化锁文件；其他所有者、未知链接、硬链接和存储冲突仍会停止启动，SSH 目录仍拒绝组或其他用户写入。面板数据库、配置与 SSH 状态共享所选数据目录的部署信任边界；请只让可信用户写入该目录，SSH 子目录的私有权限不能替代这一要求。
+
+[Docker Desktop 的 macOS bind mount 保留宿主目录原有权限](https://docs.docker.com/desktop/setup/install/mac-permission-requirements/#containers-running-as-root-within-the-linux-vm)。[4.80.0 的 VirtioFS 发布说明](https://docs.docker.com/desktop/release-notes/#4800) 记载：“Calls to `chown` will succeed, but `stat` will not be affected.” 因此不能把 `chown` 成功当作可见 UID 已变为容器 `root` 的依据，也无需递归改写宿主数据目录的所有权或权限。
+
+独立的 `/root/.ssh` volume 是可选的用户管理存储方式。各面板使用独立卷，重建时复用原卷（Compose 部署需保留项目名），并单独做好受保护的备份。[Named volume 的数据独立于容器生命周期](https://docs.docker.com/engine/storage/volumes/#a-volumes-lifecycle)。不要挂载个人 macOS `~/.ssh`。空的新卷不会迁移已有 `/opt/1panel/ssh` 密钥，包括首次启动自动生成的本地密钥；切换存储前须先保存并明确迁移原密钥，不能直接改用空卷或删除旧容器。
+
 面板 Supervisor 使用独立的 `/etc/1panel/supervisord.conf`、`/run/1panel/supervisor.sock` 与 PID 文件。工具箱的业务 Supervisor 可以初始化、管理进程及重启自身，面板进程继续运行。`1pctl` 和面板服务兼容层会明确连接面板 Supervisor。
 
 业务 Supervisor 的配置仍在 `/etc/supervisor`，worker 配置／日志位于面板数据目录；仅保留 `/opt` 不能保证容器重建后恢复业务 daemon 的 include 配置和运行状态。需要保留业务配置时，单独持久化 `/etc/supervisor`，重建后在工具箱启动业务 Supervisor 并核对进程；没有保留配置时需重新初始化。它管理的是容器内进程，不能代替宿主机的 systemd 服务管理。
