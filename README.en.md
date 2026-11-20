@@ -132,7 +132,17 @@ The V2 `amd64` and `arm64` images include libvirt clients and `qemu-img`. They c
 
 1Panel opened VM management to the Community edition in [v2.5.0](https://github.com/1Panel-dev/1Panel/releases/tag/v2.5.0). V2.5.1 allows 1 VM in Community, 5 in Professional, and unlimited VMs in Enterprise; other licensing rules remain upstream-controlled. V1 and other CPU architectures do not support this feature.
 
-The Linux host needs KVM, an accessible `/dev/kvm`, and installed, running QEMU/libvirt. Check on the host first:
+The Linux host needs KVM, an accessible `/dev/kvm`, and installed, running QEMU/libvirt.
+
+On a Debian 12 `amd64` host using the traditional `libvirtd` mode, run as root:
+
+```bash
+apt-get update
+apt-get install -y qemu-system-x86 libvirt-daemon-system libvirt-clients
+systemctl start libvirtd.socket virtlogd.socket virtlockd.socket
+```
+
+Then check on the host:
 
 ```bash
 test -c /dev/kvm
@@ -167,7 +177,7 @@ Mount custom disk, ISO and storage-pool directories read-write at **the same abs
 
 Run `virsh --connect qemu:///system list --all` inside the container to check connectivity. Panel environment checks report missing devices, directories and sockets. The page's environment-start operation cannot start host services; manage libvirt on the host. NAT, bridges, macvtap and device passthrough depend on host networking/hardware and the upstream interface; adding a device mapping alone does not enable them.
 
-The project uses isolated real libvirt/TCG tests for client connectivity, resources and lifecycle operations. TCG does not verify KVM hardware acceleration. Verify VM startup and console access on the deployment host. See libvirt's [Connection URIs](https://libvirt.org/uri.html#qemu-qemu-and-kvm-uris) and [Libvirt Daemons](https://libvirt.org/daemons.html#operating-modes) for connection and permission details.
+The project uses isolated real libvirt/TCG tests for client connectivity, resources and lifecycle operations. On a Debian 12 `amd64` host, both CN and Global images also passed native KVM startup, panel discovery, suspend and resume checks, with hardware acceleration confirmed by `query-kvm`. These native KVM tests used transient VMs without disks or network interfaces; verify guest installation, networking and browser console access on the deployment host. See libvirt's [Connection URIs](https://libvirt.org/uri.html#qemu-qemu-and-kvm-uris) and [Libvirt Daemons](https://libvirt.org/daemons.html#operating-modes) for connection and permission details.
 
 ## Environment Variables
 
@@ -177,9 +187,11 @@ The project uses isolated real libvirt/TCG tests for client connectivity, resour
 | `USERNAME` | `1panel` | Administrator username |
 | `PASSWORD` | `1panel_password` | Administrator password. Empty values and the default value generate a random password on first startup |
 | `ENTRANCE` | `entrance` | Security entrance path, without leading or trailing `/` |
-| `BASE_DIR` | `/opt` | 1Panel data directory. When you bind-mount it, set this to the real host path |
+| `BASE_DIR` | `/opt` | 1Panel base path. Panel data inside the container is stored at `${BASE_DIR}/1panel` and must be covered by the data mount. When deploying applications through the host Docker socket, use the same absolute paths on the host and container |
 | `TZ` | `Asia/Shanghai` | Container timezone |
 | `RESET` | `false` | Set to `true` to reset username, password, port, and entrance on startup |
+
+For a new deployment with a different data path, mount `/srv/panel:/srv/panel` and set `BASE_DIR=/srv/panel`. Panel data is stored at `/srv/panel/1panel`. Keep the original data mounts and `BASE_DIR` when upgrading an existing deployment.
 
 The container logs print the random password:
 
@@ -192,11 +204,12 @@ docker logs 1panel-v2
 
 ## Existing Data And Password Resets
 
-The entrypoint uses `.docker_initialized` in the data directory to decide whether Docker initialization has already run. The default data directory is `/opt/1panel`. If you set `BASE_DIR=/data`, the marker path becomes `/data/1panel/.docker_initialized` on the host.
+The entrypoint uses `.docker_initialized` in the data directory to decide whether Docker initialization has already run. Its default container path is `/opt/1panel/.docker_initialized`; with `BASE_DIR=/data`, it is `/data/1panel/.docker_initialized`. The host location depends on the data mount's `source` and `target` mapping.
 
 If you have existing data and the database exists without this marker file, the entrypoint treats the container as a first startup. It then applies `USERNAME`, `PASSWORD`, `PORT`, and `ENTRANCE`, which can change the old username, password, port, and entrance. To keep existing credentials, create the marker before starting the new container:
 
 ```bash
+# Run on the host; these examples require identical host source and container target paths
 # Default BASE_DIR=/opt
 touch /opt/1panel/.docker_initialized
 
@@ -206,7 +219,9 @@ touch /data/1panel/.docker_initialized
 
 Do not set `RESET=true` for existing data you want to preserve. `RESET=true` forces username, password, port, and entrance configuration even when `.docker_initialized` exists.
 
-Database paths:
+V2 writes `PORT` and `BASE_DIR` to the database on every startup, regardless of `.docker_initialized` or `RESET`. Keep their original values when upgrading.
+
+Database paths with the default `BASE_DIR=/opt`. With a custom `BASE_DIR`, `/opt/1panel` inside the container links to `${BASE_DIR}/1panel`, and persistent database files are stored in `${BASE_DIR}/1panel/db`:
 
 ```bash
 # V1
@@ -240,7 +255,7 @@ docker exec 1panel-v2 1panel-backup-check preflight \
   --panel-container 1panel-v2 --compose-project my-project
 ```
 
-The tool uses the panel's configured same-host Unix Docker socket. It checks that actual bind and local named-volume `Source` paths have readable **same-path mounts** in the panel. An unrelated existing container directory does not prove access to host data; nested mounts are checked too. Add selected data mounts from [V2/compose.host-data.yml](V2/compose.host-data.yml) to your existing configuration, keeping its data directory, credentials and ports. For example:
+The tool uses the panel's configured same-host Unix Docker socket. It checks that actual bind and local named-volume `Source` paths have readable **same-path mounts** in the panel. An unrelated existing container directory does not prove access to host data. For each selected source path, it checks the deepest mount covering that path; it does not recursively validate every file or submount inside the source directory. Add selected data mounts from [V2/compose.host-data.yml](V2/compose.host-data.yml) to your existing configuration, keeping its data directory, credentials and ports. For example:
 
 ```bash
 export PANEL_BACKUP_SOURCE=/srv/my-app/data
@@ -263,7 +278,7 @@ Exit code `0` means the check passed. A nonzero exit with `status: failed` means
 
 ## V2 SSH And Supervisor
 
-V2 images include the OpenSSH client and support panel-generated Ed25519, RSA and ECDSA keys. By default, `/root/.ssh` links to `ssh/` in the persistent panel data directory (`/opt/1panel/ssh` by default), preserving the database's `/root/.ssh/...` paths. Reuse the original panel data mount when recreating the container to keep keys and `authorized_keys`. Include this directory in protected backups because it contains private keys.
+V2 images include the OpenSSH client and support panel-generated Ed25519, RSA and ECDSA keys. By default, `/root/.ssh` links to `ssh/` in the persistent panel data directory, `${BASE_DIR}/1panel/ssh` (`/opt/1panel/ssh` by default), preserving the database's `/root/.ssh/...` paths. Reuse the original panel data mount when recreating the container to keep keys and `authorized_keys`. Include this directory in protected backups because it contains private keys.
 
 On upgrade, an existing ordinary SSH directory is preserved and migrated, with the original left at `/root/.ssh.before-1panel`. Conflicts, unknown links and nested mounts stop startup to avoid overwriting keys. Existing external `/root` or `/root/.ssh` mounts are kept in place. Keys stored only in an old container cannot be recovered automatically after that container is deleted; save them before upgrading. [OpenSSH removed DSA from 10.0 onward](https://www.openssh.org/txt/release-10.0), so replace old DSA keys with a supported algorithm. V2's local terminal connects to the target host over SSH and needs that host's SSH service and valid credentials.
 
@@ -308,14 +323,14 @@ docker build \
   ./V2
 ```
 
-Multi-architecture build and push:
+Multi-architecture build and push (replace `<your-dockerhub-username>` with your Docker Hub username):
 
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le,linux/s390x \
   --build-arg PANELVER=v2.5.1 \
-  -t <your-dockerhub-username>/1panel:v2.5.1 \
-  -t <your-dockerhub-username>/1panel:v2 \
+  -t "<your-dockerhub-username>/1panel:v2.5.1" \
+  -t "<your-dockerhub-username>/1panel:v2" \
   --push \
   ./V2
 
@@ -323,8 +338,8 @@ docker buildx build \
   --platform linux/amd64,linux/arm64,linux/arm/v7,linux/ppc64le,linux/s390x \
   -f ./V2/Dockerfile-Global \
   --build-arg PANELVER=v2.5.1 \
-  -t <your-dockerhub-username>/1panel:global-v2.5.1 \
-  -t <your-dockerhub-username>/1panel:global-v2 \
+  -t "<your-dockerhub-username>/1panel:global-v2.5.1" \
+  -t "<your-dockerhub-username>/1panel:global-v2" \
   --push \
   ./V2
 ```
