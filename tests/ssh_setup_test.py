@@ -51,7 +51,7 @@ class StorageContracts(unittest.TestCase):
     @contextlib.contextmanager
     def metadata_owners(self, owners):
         """Model host-visible UIDs consistently for pathname and inode reads."""
-        read_stat, read_fstat = os.stat, os.fstat
+        read_stat, read_lstat, read_fstat = os.stat, os.lstat, os.fstat
 
         def substitute(info, path):
             owner = owners.get(Path(path))
@@ -61,19 +61,49 @@ class StorageContracts(unittest.TestCase):
             values["st_uid"] = owner
             return SimpleNamespace(**values)
 
-        def path_stat(path, *args, **kwargs):
-            info = read_stat(path, *args, **kwargs)
+        def substitute_path(info, path, parent=None):
             if isinstance(path, int):
                 return substitute(info, os.readlink("/proc/self/fd/" + str(path)))
-            parent = kwargs.get("dir_fd")
             full = Path(path) if parent is None else Path(os.readlink("/proc/self/fd/" + str(parent))) / path
             return substitute(info, full)
+
+        def path_stat(path, *args, **kwargs):
+            return substitute_path(read_stat(path, *args, **kwargs), path, kwargs.get("dir_fd"))
+
+        def path_lstat(path, *args, **kwargs):
+            return substitute_path(read_lstat(path, *args, **kwargs), path, kwargs.get("dir_fd"))
 
         def inode_stat(descriptor):
             return substitute(read_fstat(descriptor), os.readlink("/proc/self/fd/" + str(descriptor)))
 
-        with patch.object(os, "stat", path_stat), patch.object(os, "fstat", inode_stat):
+        with patch.object(os, "stat", path_stat), patch.object(os, "lstat", path_lstat), \
+                patch.object(os, "fstat", inode_stat):
             yield
+
+    def test_metadata_owners_are_consistent_across_stat_lstat_and_fstat(self):
+        before = self.data.stat()
+        foreign = before.st_uid + 42
+        parent_fd = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, parent_fd)
+        data_fd = os.open(self.data, os.O_RDONLY | os.O_DIRECTORY)
+        self.addCleanup(os.close, data_fd)
+        expected = (before.st_dev, before.st_ino, foreign, before.st_gid, before.st_mode)
+        with self.metadata_owners({self.data: foreign}):
+            for method, info in (
+                ("Path.stat", self.data.stat()),
+                ("Path.lstat", self.data.lstat()),
+                ("os.stat", os.stat(self.data)),
+                ("os.stat nofollow", os.stat(self.data, follow_symlinks=False)),
+                ("os.lstat", os.lstat(self.data)),
+                ("os.stat dir_fd", os.stat(self.data.name, dir_fd=parent_fd)),
+                ("os.lstat dir_fd", os.lstat(self.data.name, dir_fd=parent_fd)),
+                ("os.stat fd", os.stat(data_fd)),
+                ("os.fstat", os.fstat(data_fd)),
+            ):
+                with self.subTest(method=method):
+                    self.assertEqual((info.st_dev, info.st_ino, info.st_uid, info.st_gid, info.st_mode),
+                                     expected)
+        self.assertEqual(self.data.stat(), before)
 
     def test_fresh_storage_and_empty_home_are_persistent(self):
         for present in (False, True):
