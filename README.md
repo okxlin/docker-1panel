@@ -132,7 +132,17 @@ V2 的 `amd64`、`arm64` 镜像包含 libvirt 客户端与 `qemu-img`，可连�
 
 1Panel 从 [v2.5.0](https://github.com/1Panel-dev/1Panel/releases/tag/v2.5.0) 起向社区版开放虚拟机管理。V2.5.1 的数量限制为社区版 1 台、专业版 5 台、企业版不限；其他授权规则由上游决定。V1 和其他 CPU 架构不支持此功能。
 
-宿主机需要 Linux KVM、可访问的 `/dev/kvm`，以及安装并启动的 QEMU/libvirt。先在宿主机检查：
+宿主机需要 Linux KVM、可访问的 `/dev/kvm`，以及安装并启动的 QEMU/libvirt。
+
+Debian 12 的 `amd64` 宿主机使用传统 `libvirtd` 模式时，以 root 执行：
+
+```bash
+apt-get update
+apt-get install -y qemu-system-x86 libvirt-daemon-system libvirt-clients
+systemctl start libvirtd.socket virtlogd.socket virtlockd.socket
+```
+
+随后在宿主机检查：
 
 ```bash
 test -c /dev/kvm
@@ -167,7 +177,7 @@ docker compose -f V2/compose.host-libvirt.yml up -d
 
 容器内可运行 `virsh --connect qemu:///system list --all` 检查连接。面板的环境检测会报告缺少设备、目录或 socket；页面的“启动环境”操作不能启动宿主机服务，应在宿主机上管理 libvirt。NAT、桥接、macvtap 与设备直通的实际可用范围取决于宿主机网络/硬件和上游界面，不会因添加设备映射自动获得支持。
 
-本项目使用隔离的真实 libvirt/TCG 环境验证客户端连接、资源与生命周期操作；TCG 测试不能证明 KVM 硬件加速。部署后仍需在目标宿主机验证虚拟机启动和控制台。libvirt 的连接与权限说明见 [Connection URIs](https://libvirt.org/uri.html#qemu-qemu-and-kvm-uris) 和 [Libvirt Daemons](https://libvirt.org/daemons.html#operating-modes)。
+本项目使用隔离的真实 libvirt/TCG 环境验证客户端连接、资源与生命周期操作，并在 Debian 12 `amd64` 宿主机上验证 CN/Global 镜像的原生 KVM 启动、面板发现与暂停/恢复，使用 `query-kvm` 确认硬件加速。原生 KVM 测试使用无磁盘、无网络接口的瞬态虚拟机；客体安装、网络和浏览器控制台仍需在部署宿主机验证。libvirt 的连接与权限说明见 [Connection URIs](https://libvirt.org/uri.html#qemu-qemu-and-kvm-uris) 和 [Libvirt Daemons](https://libvirt.org/daemons.html#operating-modes)。
 
 ## 环境变量
 

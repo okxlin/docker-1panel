@@ -132,7 +132,17 @@ The V2 `amd64` and `arm64` images include libvirt clients and `qemu-img`. They c
 
 1Panel opened VM management to the Community edition in [v2.5.0](https://github.com/1Panel-dev/1Panel/releases/tag/v2.5.0). V2.5.1 allows 1 VM in Community, 5 in Professional, and unlimited VMs in Enterprise; other licensing rules remain upstream-controlled. V1 and other CPU architectures do not support this feature.
 
-The Linux host needs KVM, an accessible `/dev/kvm`, and installed, running QEMU/libvirt. Check on the host first:
+The Linux host needs KVM, an accessible `/dev/kvm`, and installed, running QEMU/libvirt.
+
+On a Debian 12 `amd64` host using the traditional `libvirtd` mode, run as root:
+
+```bash
+apt-get update
+apt-get install -y qemu-system-x86 libvirt-daemon-system libvirt-clients
+systemctl start libvirtd.socket virtlogd.socket virtlockd.socket
+```
+
+Then check on the host:
 
 ```bash
 test -c /dev/kvm
@@ -167,7 +177,7 @@ Mount custom disk, ISO and storage-pool directories read-write at **the same abs
 
 Run `virsh --connect qemu:///system list --all` inside the container to check connectivity. Panel environment checks report missing devices, directories and sockets. The page's environment-start operation cannot start host services; manage libvirt on the host. NAT, bridges, macvtap and device passthrough depend on host networking/hardware and the upstream interface; adding a device mapping alone does not enable them.
 
-The project uses isolated real libvirt/TCG tests for client connectivity, resources and lifecycle operations. TCG does not verify KVM hardware acceleration. Verify VM startup and console access on the deployment host. See libvirt's [Connection URIs](https://libvirt.org/uri.html#qemu-qemu-and-kvm-uris) and [Libvirt Daemons](https://libvirt.org/daemons.html#operating-modes) for connection and permission details.
+The project uses isolated real libvirt/TCG tests for client connectivity, resources and lifecycle operations. On a Debian 12 `amd64` host, both CN and Global images also passed native KVM startup, panel discovery, suspend and resume checks, with hardware acceleration confirmed by `query-kvm`. These native KVM tests used transient VMs without disks or network interfaces; verify guest installation, networking and browser console access on the deployment host. See libvirt's [Connection URIs](https://libvirt.org/uri.html#qemu-qemu-and-kvm-uris) and [Libvirt Daemons](https://libvirt.org/daemons.html#operating-modes) for connection and permission details.
 
 ## Environment Variables
 
